@@ -1,0 +1,69 @@
+:root {
+  /* UNGRD Institutional Colors */
+  --color-primary-900: #141e4f;
+  --color-primary-800: #213362;
+  --color-primary-700: #1b4472;
+  --color-primary-600: #07519d;
+  --color-primary-500: #00aee3;
+  --color-primary-100: #e5edf8;
+  --color-primary-50:  #f0f5fb;
+
+  --color-accent:      #ffcd00;
+  --color-accent-dark: #dca732;
+  --color-accent-light: #ffe183;
+
+  --color-secondary-700: #a24646;
+  --color-secondary-600: #cd2180;
+  --color-secondary-500: #ffcd00;
+  --color-secondary-400: #ee7c00;
+  --color-secondary-300: #a8cf45;
+
+  /* Semantic */
+  --color-success:       #3a7d2e;
+  --color-success-light: #edf7e8;
+  --color-warning:       #ee7c00;
+  --color-warning-light: #fff4e8;
+  --color-danger:        #a24646;
+  --color-danger-light:  #fdecec;
+  --color-info:          #07519d;
+  --color-info-light:    #e5edf8;
+  --color-magenta:       #cd2180;
+  --color-magenta-light: #fce8f4;
+  --color-cyan:          #00aee3;
+  --color-cyan-light:    #e0f6fd;
+
+  /* Surfaces */
+  --color-background:      #f0f3f8;
+  --color-surface:         #ffffff;
+  --color-surface-muted:   #f7f9fb;
+  --color-surface-alt:     #eef1f6;
+  --color-border:          #d2d3d5;
+  --color-border-strong:   #b2bcd0;
+
+  /* Text */
+  --color-text-primary:    #1a2438;
+  --color-text-secondary:  #5d6570;
+  --color-text-inverse:    #ffffff;
+  --color-text-muted:      #8a9bb0;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgb(20 30 79 / 0.06);
+  --shadow-sm: 0 2px 6px rgb(20 30 79 / 0.08);
+  --shadow-md: 0 6px 20px rgb(20 30 79 / 0.12);
+  --shadow-lg: 0 16px 40px rgb(20 30 79 / 0.16);
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Transitions */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 350ms ease;
+
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
