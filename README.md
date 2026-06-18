@@ -1,6 +1,6 @@
 # MIRA
 
-MIRA es una aplicacion web institucional para gestionar acciones correctivas y de mejora de la UNGRD. El sistema integra autenticacion, control de acceso por roles, flujo documental por etapas, filtros por proceso, dashboard operativo, bandejas de pendientes, historial y backend en Google Apps Script conectado a Google Sheets.
+MIRA es una aplicacion web institucional para gestionar acciones correctivas y de mejora de la UNGRD. El frontend integra autenticacion, control de acceso por roles, flujo documental por etapas, filtros por proceso, dashboard operativo, bandejas de pendientes e historial. La app consume un backend externo configurado mediante variables de entorno.
 
 ## Funcionalidades principales
 
@@ -24,8 +24,6 @@ MIRA es una aplicacion web institucional para gestionar acciones correctivas y d
 - React Hook Form + Zod.
 - Recharts.
 - Lucide React.
-- Google Apps Script como backend.
-- Google Sheets como base de datos.
 - Vercel como plataforma objetivo de despliegue frontend.
 
 ## Instalacion local
@@ -72,34 +70,13 @@ npm run build
 ## Estructura del repositorio
 
 ```text
-app_scripts/   Backend Google Apps Script.
-docs/          Documentacion funcional y tecnica.
 public/        Imagenes, logos y assets publicos.
 src/           Frontend React.
 ```
 
-Documentacion clave:
+`CHANGELOG.md` conserva el historial de cambios publico del frontend.
 
-- [`docs/GUIA_FUNCIONAL_MIRA.md`](docs/GUIA_FUNCIONAL_MIRA.md): guia funcional completa para manual de usuario.
-- [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md): arquitectura general.
-- [`docs/API.md`](docs/API.md): contrato de API Apps Script.
-- [`docs/MODELO_DE_DATOS.md`](docs/MODELO_DE_DATOS.md): estructura de hojas y campos.
-- [`CHANGELOG.md`](CHANGELOG.md): historial de cambios.
-
-## Configuracion de Apps Script
-
-1. Cree o abra el proyecto Apps Script vinculado al Google Sheet.
-2. Copie los archivos de `app_scripts` en orden numerico.
-3. Configure Script Properties:
-   - `SPREADSHEET_ID`: ID real de la hoja de calculo.
-   - `AUTH_TOKEN_SECRET`: secreto privado para firmar tokens.
-   - `AUTH_FALLBACK`: modo de respaldo, por ejemplo `READ_ONLY`.
-4. Ejecute `setupProject()`.
-5. Ejecute `validateConfiguration()`.
-6. Despliegue el proyecto como aplicacion web.
-7. Configure la URL del despliegue en `VITE_APPS_SCRIPT_URL`.
-
-No se debe commitear el ID real de la hoja, secretos, `.env`, credenciales de Google ni archivos exportados con datos institucionales.
+No se debe commitear el ID real de la hoja, secretos, `.env`, credenciales de Google, Apps Script local, documentacion interna ni archivos exportados con datos institucionales.
 
 ## Despliegue en Vercel
 
@@ -127,9 +104,10 @@ El `.gitignore` excluye:
 - `.env` y variantes locales.
 - Credenciales y llaves.
 - `.vercel`.
-- `.clasp.json` y archivos de autenticacion local.
+- `app_scripts`, `.clasp.json` y archivos de autenticacion local.
+- `docs`, documentacion interna y carpetas locales de hojas de calculo.
 - `node_modules`, `dist`, logs y coverage.
-- Excel y PDF locales que puedan contener datos internos.
+- Excel, CSV, PDF y documentos locales que puedan contener datos internos.
 
 ## Licencia y uso
 

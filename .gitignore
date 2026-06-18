@@ -22,9 +22,15 @@ service-account*.json
 .vercel/
 
 # Google Apps Script / clasp local auth
+app_scripts/
 .clasp.json
 .clasprc.json
 app_scripts/.clasp.json
+
+# Internal documentation and source spreadsheets
+docs/
+hoja_calculo/
+hojas_calculo/
 
 # Logs and runtime files
 *.log
@@ -43,4 +49,8 @@ Thumbs.db
 *.xls
 *.xlsx
 *.xlsm
+*.csv
+*.ods
 *.pdf
+*.doc
+*.docx
