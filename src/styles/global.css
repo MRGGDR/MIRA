@@ -2588,6 +2588,112 @@ a {
   color: var(--color-primary-900);
 }
 
+.evidence-url-field {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.evidence-url-field__head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.evidence-url-field__head label {
+  margin: 0;
+}
+
+.evidence-url-field__button {
+  min-height: 34px;
+  padding: 8px 12px;
+}
+
+.evidence-url-field__instructions {
+  color: var(--color-text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 2px 0 4px;
+}
+
+.config-section-head {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.config-section-head .muted {
+  margin: 4px 0 0;
+}
+
+.config-user-form {
+  align-items: end;
+}
+
+.config-active-toggle {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-weight: 700;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.config-form-actions {
+  justify-content: flex-end;
+}
+
+.config-users-table td:first-child {
+  font-weight: 800;
+}
+
+.config-users-table input,
+.config-users-table select {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  margin: 3px 0;
+  min-height: 34px;
+  padding: 7px 9px;
+  width: 100%;
+}
+
+.config-users-table__edit-row td {
+  vertical-align: top;
+}
+
+.config-row-actions {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.config-row-action {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.user-status-pill {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 4px 9px;
+}
+
+.user-status-pill--active {
+  background: var(--color-success-light);
+  color: #14663c;
+}
+
+.user-status-pill--inactive {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
 .dynamic-errors {
   background: var(--color-danger-light);
   border: 1px solid color-mix(in srgb, var(--color-danger) 30%, white);
@@ -3688,6 +3794,127 @@ a {
 .report-summary-card span {
   color: var(--color-text-secondary);
   font-size: 0.82rem;
+}
+
+.feedback-message {
+  align-items: flex-start;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.feedback-message--success {
+  background: var(--color-success-light);
+  border-color: rgb(58 125 46 / 0.22);
+  color: var(--color-success);
+}
+
+.feedback-message--error {
+  background: var(--color-danger-light);
+  border-color: rgb(181 48 48 / 0.22);
+  color: var(--color-danger);
+}
+
+.feedback-message__icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding-top: 1px;
+}
+
+.feedback-message strong {
+  color: inherit;
+  display: block;
+  font-size: 0.98rem;
+}
+
+.feedback-message p {
+  color: var(--color-text-primary);
+  margin: 3px 0 0;
+}
+
+.save-modal {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 1100;
+}
+
+.save-modal__backdrop {
+  background: rgb(8 16 35 / 0.48);
+  border: 0;
+  cursor: pointer;
+  inset: 0;
+  position: absolute;
+}
+
+.save-modal__card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 70px rgb(8 16 35 / 0.28);
+  display: grid;
+  gap: 18px;
+  max-width: 520px;
+  padding: 22px;
+  position: relative;
+  width: min(100%, 520px);
+}
+
+.save-modal__head {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+}
+
+.save-modal__icon {
+  align-items: center;
+  background: var(--color-info-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-700);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.save-modal__head h3 {
+  color: var(--color-primary-900);
+  font-size: 1.12rem;
+  margin: 0;
+}
+
+.save-modal__head p {
+  color: var(--color-text-secondary);
+  margin: 4px 0 0;
+}
+
+.save-modal__summary {
+  background: var(--color-background-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+}
+
+.save-modal__summary span {
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.save-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .access-banner {

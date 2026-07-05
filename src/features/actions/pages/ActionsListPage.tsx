@@ -17,9 +17,9 @@ import { Link } from 'react-router-dom';
 import { AccessContextBanner } from '@/components/common/AccessContextBanner';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
-import { getProcessName } from '@/config/processes';
+import { getProcessName, getProcessNamesForAccess } from '@/config/processes';
 import { actionQueries } from '@/features/actions/api/actionQueries';
-import type { ActionFilters, CorrectiveAction, DocumentState } from '@/features/actions/types';
+import type { ActionFilters, CorrectiveAction, CurrentUser, DocumentState } from '@/features/actions/types';
 import { getVisualStatus, isActionExpired } from '@/features/actions/utils/status';
 import {
   buildWorkflowRoleQueues,
@@ -108,14 +108,37 @@ function uniqueSorted<T extends string>(values: T[], sorter?: (value: T) => stri
   });
 }
 
+function getDefaultStageForRole(role: string | undefined): DocumentState | '' {
+  if (role === 'REV') return 'PLAN_ACCION';
+  if (role === 'VAL') return 'VALIDACION';
+  if (role === 'OCI') return 'REVISION_OCI';
+  return '';
+}
+
+function canCreateReports(user: CurrentUser | null | undefined): boolean {
+  return Boolean(user?.permissions.canAdmin || (user?.rol === 'CREADOR' && user.permissions.canCreate));
+}
+
+function canManageAction(action: CorrectiveAction, user: CurrentUser | null | undefined): boolean {
+  if (!user) return false;
+  if (user.permissions.canAdmin) return true;
+  return isActionPendingForRole(action, user.rol);
+}
+
+function hasGlobalProcessScope(user: CurrentUser | null | undefined): boolean {
+  return Boolean(user?.permissions.canAdmin || user?.rol === 'OCI');
+}
+
 export function ActionsListPage() {
+  const { user } = useAuth();
+  const defaultStageForRole = getDefaultStageForRole(user?.rol);
   const [draftFilters, setDraftFilters] = useState<ActionFilters>(defaultFilters);
   const [filters, setFilters] = useState<ActionFilters>(defaultFilters);
-  const [draftStageFilter, setDraftStageFilter] = useState('');
-  const [stageFilter, setStageFilter] = useState('');
+  const [draftStageFilter, setDraftStageFilter] = useState<DocumentState | ''>(defaultStageForRole);
+  const [stageFilter, setStageFilter] = useState<DocumentState | ''>(defaultStageForRole);
   const allActionsQuery = useQuery(actionQueries.all());
-  const { user } = useAuth();
-  const scopedProcess = user?.permissions.canAdmin ? '' : (user?.proceso ?? '');
+  const canCreate = canCreateReports(user);
+  const scopedProcess = hasGlobalProcessScope(user) ? '' : (getProcessNamesForAccess(user?.proceso ?? '')[0] ?? '');
   const effectiveProcessFilter = scopedProcess || filters.proceso || '';
   const effectiveDraftProcessFilter = scopedProcess || draftFilters.proceso || '';
 
@@ -188,18 +211,21 @@ export function ActionsListPage() {
           <span className="report-hero__eyebrow">Gestion SIPLAG</span>
           <h3>Reporte y seguimiento en un solo flujo</h3>
           <p>
-            Usa los filtros para ubicar registros existentes o crea un nuevo reporte con la informacion del hallazgo,
-            plan de actividades, responsables y evaluacion.
+            {canCreate
+              ? 'Crea nuevos reportes y consulta el seguimiento de las acciones registradas.'
+              : 'Consulta las acciones disponibles para tu etapa y diligencia solo la parte que corresponde a tu rol.'}
           </p>
         </div>
         <div className="report-hero__actions">
-          <Link className="button button--primary" to="/acciones/nueva">
-            <FilePlus2 aria-hidden size={18} />
-            Crear reporte
-          </Link>
+          {canCreate ? (
+            <Link className="button button--primary" to="/acciones/nueva">
+              <FilePlus2 aria-hidden size={18} />
+              Crear reporte
+            </Link>
+          ) : null}
           <a className="button button--secondary" href="#report-filters">
             <Search aria-hidden size={18} />
-            Buscar registro
+            {canCreate ? 'Buscar registro' : 'Ver disponibles'}
           </a>
         </div>
       </section>
@@ -312,11 +338,14 @@ export function ActionsListPage() {
               onChange={(event) => updateFilter('proceso', event.target.value)}
             >
               {!scopedProcess ? <option value="">Todos</option> : null}
-              {(scopedProcess ? [scopedProcess] : filterOptions.procesos).map((process) => (
-                <option key={process} value={process}>
-                  {process} - {getProcessName(process)}
-                </option>
-              ))}
+              {(scopedProcess ? [scopedProcess] : filterOptions.procesos).map((process) => {
+                const processName = getProcessName(process);
+                return (
+                  <option key={process} value={process}>
+                    {process === processName ? process : `${process} - ${processName}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div className="form-field">
@@ -358,7 +387,7 @@ export function ActionsListPage() {
           </div>
           <div className="form-field">
             <label htmlFor="filter-stage">Etapa del flujo</label>
-            <select id="filter-stage" value={draftStageFilter} onChange={(event) => setDraftStageFilter(event.target.value)}>
+            <select id="filter-stage" value={draftStageFilter} onChange={(event) => setDraftStageFilter(event.target.value as DocumentState | '')}>
               <option value="">Todas</option>
               {filterOptions.etapas.map((stage) => (
                 <option key={stage} value={stage}>
@@ -391,10 +420,12 @@ export function ActionsListPage() {
                 {actionsQuery.data.total} resultado(s) para los filtros actuales.
               </p>
             </div>
-            <Link className="button button--secondary" to="/acciones/nueva">
-              <FilePlus2 aria-hidden size={16} />
-              Reportar nuevo
-            </Link>
+            {canCreate ? (
+              <Link className="button button--secondary" to="/acciones/nueva">
+                <FilePlus2 aria-hidden size={16} />
+                Reportar nuevo
+              </Link>
+            ) : null}
           </div>
 
           <div className="table-wrap">
@@ -420,11 +451,17 @@ export function ActionsListPage() {
                     <td colSpan={11}>
                       <div className="empty-state">
                         <strong>No hay reportes para estos filtros.</strong>
-                        <span>Ajusta la busqueda o registra una nueva accion.</span>
-                        <Link className="button button--primary" to="/acciones/nueva">
-                          <FilePlus2 aria-hidden size={16} />
-                          Reportar accion
-                        </Link>
+                        <span>
+                          {canCreate
+                            ? 'Ajusta la busqueda o registra una nueva accion.'
+                            : 'Ajusta la busqueda o espera a que una accion llegue a tu etapa.'}
+                        </span>
+                        {canCreate ? (
+                          <Link className="button button--primary" to="/acciones/nueva">
+                            <FilePlus2 aria-hidden size={16} />
+                            Reportar accion
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -458,9 +495,11 @@ export function ActionsListPage() {
                           <Link className="button button--secondary" to={`/acciones/${action.id}`} aria-label={`Ver accion ${action.id}`}>
                             <Eye aria-hidden size={16} />
                           </Link>
-                          <Link className="button button--secondary" to={`/acciones/${action.id}/editar`} aria-label={`Editar accion ${action.id}`}>
-                            <Pencil aria-hidden size={16} />
-                          </Link>
+                          {canManageAction(action, user) ? (
+                            <Link className="button button--secondary" to={`/acciones/${action.id}/editar`} aria-label={`Gestionar accion ${action.id}`}>
+                              <Pencil aria-hidden size={16} />
+                            </Link>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

@@ -7,20 +7,20 @@ import {
   Pencil,
   Send,
   ShieldCheck,
-  Users,
   type LucideIcon,
 } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
+import { FeedbackMessage, type FeedbackMessageState } from '@/components/feedback/FeedbackMessage';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { actionQueries } from '@/features/actions/api/actionQueries';
 import { apiClient } from '@/services/apiClient';
 import { useAuth } from '@/features/auth/AuthContext';
-import type { CorrectiveAction, DefinitiveCause, ImprovementPlanActivity, ImprovementTeamMember } from '@/features/actions/types';
+import type { CorrectiveAction, ImprovementPlanActivity } from '@/features/actions/types';
+import { isActionPendingForRole } from '@/features/actions/utils/workflow';
 import { formatDate } from '@/utils/date';
-import { formatCurrency } from '@/utils/format';
 
 type DetailField = {
   label: string;
@@ -30,6 +30,7 @@ type DetailField = {
 
 export function ActionDetailPage() {
   const id = Number(useParams().id);
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const actionQuery = useQuery(actionQueries.detail(id));
@@ -50,6 +51,8 @@ export function ActionDetailPage() {
     action.eficacia === 'SI' ? 'EFICAZ' : action.eficacia === 'NO' ? 'NO EFICAZ' : 'SIN EVALUAR';
   const lastActivity = getLastActivity(action);
   const canNotifyOci = Boolean((user?.permissions.canNotifyOci || user?.permissions.canAdmin) && !action.correoEnviado);
+  const canEditAction = Boolean(user?.permissions.canAdmin || isActionPendingForRole(action, user?.rol));
+  const feedback = (location.state as { feedback?: FeedbackMessageState } | null)?.feedback;
 
   return (
     <div className="stack action-detail">
@@ -64,13 +67,16 @@ export function ActionDetailPage() {
                 {notifyOci.isPending ? 'Notificando...' : 'Notificar a Control Interno'}
               </button>
             ) : null}
-            <Link className="button button--primary" to={`/acciones/${action.id}/editar`}>
-              <Pencil aria-hidden size={18} />
-              Editar
-            </Link>
+            {canEditAction ? (
+              <Link className="button button--primary" to={`/acciones/${action.id}/editar`}>
+                <Pencil aria-hidden size={18} />
+                Editar
+              </Link>
+            ) : null}
           </>
         }
       />
+      {feedback ? <FeedbackMessage {...feedback} /> : null}
       {notifyOci.isError ? <ErrorMessage error={notifyOci.error} /> : null}
 
       <section className="record-overview">
@@ -113,7 +119,6 @@ export function ActionDetailPage() {
         title="Descripcion"
         fields={[
           { label: 'Descripcion', value: action.descripcion, wide: true },
-          { label: 'Adjuntos / Evidencia', value: action.evidencia, wide: true },
         ]}
       />
 
@@ -122,13 +127,11 @@ export function ActionDetailPage() {
         title="Accion de Contencion"
         fields={[
           { label: 'Responsable de Seguimiento', value: action.responsable },
-          { label: 'Descripcion de la Accion de Contencion', value: action.correccion, wide: true },
+          { label: 'Descripcion de la Accion de Contencion', value: action.accionContencion || action.correccion, wide: true },
           { label: 'Fecha', value: formatDate(action.revisionFecha) },
           { label: 'Respuesta a la Accion de Contencion', value: action.revisionObservacion, wide: true },
         ]}
       />
-
-      <MembersSection action={action} />
 
       <DetailSection
         icon={Network}
@@ -139,8 +142,6 @@ export function ActionDetailPage() {
           { label: 'Empleado', value: action.identificadoPor },
         ]}
       />
-
-      <DefinitiveCausesSection action={action} />
 
       <PlanSection action={action} />
 
@@ -186,74 +187,6 @@ function DetailSection({
   );
 }
 
-function MembersSection({ action }: { action: CorrectiveAction }) {
-  const members = buildTeamMembers(action);
-
-  return (
-    <section className="detail-card">
-      <SectionHeading icon={Users} title="Miembros del Equipo de Mejoramiento Continuo" />
-      <div className="table-wrap improvement-table-wrap">
-        <table className="data-table improvement-table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Previas</th>
-              <th>Votacion</th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.length ? (
-              members.map((member, index) => (
-                <tr key={`${member.nombre}-${index}`}>
-                  <td>{member.nombre || 'Sin registrar'}</td>
-                  <td>{member.previas || 'Sin registrar'}</td>
-                  <td>{member.votacion || 'Sin registrar'}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={3}>Sin registrar</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function DefinitiveCausesSection({ action }: { action: CorrectiveAction }) {
-  const causes = buildDefinitiveCauses(action);
-
-  return (
-    <section className="detail-card">
-      <SectionHeading icon={ListChecks} title="Definicion de Causas Definitivas" />
-      <div className="table-wrap improvement-table-wrap">
-        <table className="data-table improvement-table">
-          <thead>
-            <tr>
-              <th>Causa</th>
-              <th>Descripcion</th>
-              <th>Votos</th>
-              <th>Puntaje</th>
-            </tr>
-          </thead>
-          <tbody>
-            {causes.map((cause, index) => (
-              <tr key={`${cause.causa}-${index}`}>
-                <td>{cause.causa || 'Sin registrar'}</td>
-                <td>{cause.descripcion || 'Sin registrar'}</td>
-                <td>{cause.votos}</td>
-                <td>{cause.puntaje.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 function PlanSection({ action }: { action: CorrectiveAction }) {
   const activities = buildPlanActivities(action);
 
@@ -261,20 +194,20 @@ function PlanSection({ action }: { action: CorrectiveAction }) {
     <section className="detail-card">
       <SectionHeading
         icon={ListChecks}
-        title="Plan de Mejoramiento"
-        subtitle="Actividad, responsables, fechas, presupuesto y controles asociados al seguimiento."
+        title="Plan de actividades"
+        subtitle="Actividades, responsables, ejecucion, evidencias y validacion."
       />
       <div className="table-wrap improvement-table-wrap">
         <table className="data-table improvement-table plan-table">
           <thead>
             <tr>
               <th>Actividad</th>
-              <th>Apertura</th>
-              <th>Cierre</th>
-              <th>Presupuesto</th>
+              <th>Inicio</th>
+              <th>Fin</th>
+              <th>Evidencia</th>
               <th>Tipo</th>
               <th>Responsables</th>
-              <th>Fecha Control</th>
+              <th>Fecha</th>
               <th>Observacion</th>
             </tr>
           </thead>
@@ -298,11 +231,11 @@ function PlanActivityRows({ activity }: { activity: ImprovementPlanActivity }) {
         </td>
         <td rowSpan={2}>{formatDate(activity.fechaApertura)}</td>
         <td rowSpan={2}>{formatDate(activity.fechaCierre)}</td>
-        <td rowSpan={2}>{formatCurrency(activity.presupuesto)}</td>
+        <td rowSpan={2}>{activity.evidencia || 'Sin registrar'}</td>
         <td>
-          <span className="control-chip">Rev</span>
+          <span className="control-chip">Ejec</span>
         </td>
-        <td>{activity.revisionResponsable || activity.responsable || 'Sin registrar'}</td>
+        <td>{activity.responsable || 'Sin registrar'}</td>
         <td>{formatDate(activity.revisionFecha)}</td>
         <td>{activity.revisionObservacion || 'Sin registrar'}</td>
       </tr>
@@ -388,38 +321,6 @@ function DetailValue({ field }: { field: DetailField }) {
   );
 }
 
-function splitList(value: string): string[] {
-  return value
-    .split(/\n|;/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function buildTeamMembers(action: CorrectiveAction): ImprovementTeamMember[] {
-  if (action.equipoMejoramientoDetalle?.length) {
-    return action.equipoMejoramientoDetalle.filter((member) => member.nombre || member.previas || member.votacion);
-  }
-  return splitList(action.equipoMejoramiento).map((member) => ({
-    nombre: member,
-    previas: '',
-    votacion: '',
-  }));
-}
-
-function buildDefinitiveCauses(action: CorrectiveAction): DefinitiveCause[] {
-  if (action.causasDefinitivas?.length) {
-    return action.causasDefinitivas.filter((cause) => cause.causa || cause.descripcion || cause.votos || cause.puntaje);
-  }
-  return [
-    {
-      causa: action.causaRaiz,
-      descripcion: action.correccion,
-      votos: action.causaRaiz ? 1 : 0,
-      puntaje: action.causaRaiz ? 1 : 0,
-    },
-  ];
-}
-
 function buildPlanActivities(action: CorrectiveAction): ImprovementPlanActivity[] {
   if (action.planMejoramiento?.length) {
     return action.planMejoramiento.filter(
@@ -428,6 +329,7 @@ function buildPlanActivities(action: CorrectiveAction): ImprovementPlanActivity[
         activity.responsable ||
         activity.revisionObservacion ||
         activity.validacionObservacion ||
+        activity.evidencia ||
         activity.fechaApertura ||
         activity.fechaCierre,
     );
@@ -445,6 +347,7 @@ function buildPlanActivities(action: CorrectiveAction): ImprovementPlanActivity[
       validacionResponsable: action.validacionResponsable,
       validacionFecha: action.validacionFecha,
       validacionObservacion: action.validacionObservacion,
+      evidencia: action.evidencia,
     },
   ];
 }

@@ -3,8 +3,9 @@ import type { CorrectiveAction } from '@/features/actions/types';
 import { todayIso } from '@/utils/date';
 
 export function getDefaultActionValues(proceso = ''): ActionFormValues {
+  const today = todayIso();
   return {
-    fechaElaboracion: todayIso(),
+    fechaElaboracion: today,
     origen: '',
     tipoAccion: '',
     proceso,
@@ -18,9 +19,24 @@ export function getDefaultActionValues(proceso = ''): ActionFormValues {
     causasDefinitivas: [],
     correccion: '',
     accion: '',
-    planMejoramiento: [],
+    planMejoramiento: [
+      {
+        actividad: '',
+        fechaApertura: today,
+        fechaCierre: '',
+        presupuesto: 0,
+        responsable: '',
+        revisionResponsable: '',
+        revisionFecha: '',
+        revisionObservacion: '',
+        validacionResponsable: '',
+        validacionFecha: '',
+        validacionObservacion: '',
+        evidencia: '',
+      },
+    ],
     responsable: '',
-    fechaApertura: todayIso(),
+    fechaApertura: today,
     fechaCierre: '',
     fechaInicioAccion: '',
     fechaFinAccion: '',
@@ -50,7 +66,10 @@ export function actionToFormValues(action: CorrectiveAction): ActionFormValues {
     ...action,
     equipoMejoramientoDetalle: action.equipoMejoramientoDetalle ?? [],
     causasDefinitivas: action.causasDefinitivas ?? [],
-    planMejoramiento: action.planMejoramiento ?? [],
+    planMejoramiento: (action.planMejoramiento ?? []).map((activity) => ({
+      ...activity,
+      evidencia: activity.evidencia ?? '',
+    })),
     presupuesto: Number(action.presupuesto || 0),
     correoEnviado: Boolean(action.correoEnviado),
     fechasBloqueadas: Boolean(action.fechasBloqueadas),

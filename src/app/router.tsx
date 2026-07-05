@@ -7,6 +7,7 @@ import { ActionCreatePage } from '@/features/actions/pages/ActionCreatePage';
 import { ActionDetailPage } from '@/features/actions/pages/ActionDetailPage';
 import { ActionEditPage } from '@/features/actions/pages/ActionEditPage';
 import { ActionsListPage } from '@/features/actions/pages/ActionsListPage';
+import { ConfigurationPage } from '@/features/configuration/ConfigurationPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 
 export function AppRouter() {
@@ -26,6 +27,7 @@ export function AppRouter() {
         <Route path="/acciones/:id" element={<ActionDetailPage />} />
         <Route path="/acciones/:id/editar" element={<ActionEditPage />} />
         <Route path="/historial" element={<AuditPage />} />
+        <Route path="/configuracion" element={<ConfigurationPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

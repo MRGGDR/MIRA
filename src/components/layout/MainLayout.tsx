@@ -18,7 +18,7 @@ export function MainLayout() {
         <p className="nav-section-label">Modulos</p>
         <nav aria-label="Navegacion principal">
           <ul className="nav-list">
-            {navigationItems.map((item) => {
+            {navigationItems.filter((item) => !item.adminOnly || user?.permissions.canAdmin).map((item) => {
               const Icon = item.icon;
               return (
                 <li key={item.path}>
@@ -35,7 +35,7 @@ export function MainLayout() {
           <div className="sidebar__session">
             <span className="sidebar__user-card">
               {user?.nombre ?? 'Sesion activa'} - {user?.rol}
-              {user?.proceso && !user.permissions.canAdmin ? ` - ${user.proceso}` : ''}
+              {user?.rol === 'OCI' ? ' - Todos los procesos' : user?.proceso && !user.permissions.canAdmin ? ` - ${user.proceso}` : ''}
             </span>
             <button className="sidebar__logout" type="button" onClick={logout}>
               Cerrar sesion

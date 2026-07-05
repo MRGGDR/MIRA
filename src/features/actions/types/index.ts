@@ -6,6 +6,7 @@ export type {
   AuditRecord,
   CorrectiveAction,
   CreateActionInput,
+  CreateUserInput,
   CurrentUser,
   DashboardStats,
   DefinitiveCause,
@@ -13,7 +14,9 @@ export type {
   Effectiveness,
   ImprovementPlanActivity,
   ImprovementTeamMember,
+  ManagedUser,
   Parameters,
   UpdateActionInput,
+  UpdateUserInput,
   UserRole,
 } from './actionTypes';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, Headphones, LockKeyhole, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Headphones, LockKeyhole, Lock, ShieldCheck, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLoader } from '@/context/LoaderContext';
 import { useAuth } from '@/features/auth/AuthContext';
@@ -32,14 +32,14 @@ function FormField({ children, error, icon: Icon, id, label }: FormFieldProps) {
 function LoginCard() {
   const { login } = useAuth();
   const { show, hide } = useLoader();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const showEmailError = submitted && !email.trim();
+  const showIdentifierError = submitted && !identifier.trim();
   const showPasswordError = submitted && !password.trim();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -47,12 +47,12 @@ function LoginCard() {
     setSubmitted(true);
     setError('');
 
-    if (!email.trim() || !password.trim()) return;
+    if (!identifier.trim() || !password.trim()) return;
 
     setIsSubmitting(true);
     show('Iniciando sesión...');
     try {
-      await login(email, password);
+      await login(identifier, password);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible iniciar sesión.');
     } finally {
@@ -69,26 +69,25 @@ function LoginCard() {
 
       <header className="login-card__header">
         <h1 id="login-title">Ingresar a MIRA</h1>
-        <p>Accede con tu cuenta institucional</p>
+        <p>Accede con el usuario asignado</p>
         <span className="login-card__tricolor" aria-hidden="true" />
       </header>
 
       <form className="login-form" onSubmit={(event) => void submit(event)} noValidate>
         <FormField
-          error={showEmailError ? 'Ingresa tu correo institucional.' : undefined}
-          icon={Mail}
-          id="login-email"
-          label="Correo institucional"
+          error={showIdentifierError ? 'Ingresa tu usuario.' : undefined}
+          icon={User}
+          id="login-user"
+          label="Usuario"
         >
           <input
-            id="login-email"
-            aria-invalid={showEmailError}
-            autoComplete="email"
-            inputMode="email"
-            placeholder="usuario@gestiondelriesgo.gov.co"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            id="login-user"
+            aria-invalid={showIdentifierError}
+            autoComplete="username"
+            placeholder="Ingresa tu usuario"
+            type="text"
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
           />
         </FormField>
 

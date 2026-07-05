@@ -1,12 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown, Eye, Lock, PencilLine, Plus, Save, Trash2, X, type LucideIcon } from 'lucide-react';
+import { ChevronDown, ExternalLink, Eye, Lock, PencilLine, Plus, Save, Trash2, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useFieldArray, useForm, useWatch, type FieldErrors, type SubmitHandler, type UseFormRegister } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch, type FieldErrors, type FieldPath, type SubmitHandler, type UseFormRegister } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { PROCESSES } from '@/config/processes';
+import { FeedbackMessage } from '@/components/feedback/FeedbackMessage';
+import { getProcessNamesForAccess, isLegacyProcessCode, PROCESS_LEADERS, PROCESSES } from '@/config/processes';
 import { actionSchema, type ActionFormValues } from '@/features/actions/schemas/actionSchema';
 import type { CurrentUser, Parameters } from '@/features/actions/types';
-import { uniqueOptionSorted } from '@/utils/format';
+import { todayIso } from '@/utils/date';
+import { optionIdentity, uniqueOptionSorted } from '@/utils/format';
 
 interface ActionFormProps {
   mode: 'create' | 'edit';
@@ -40,13 +42,12 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     control,
     formState: { errors, isDirty },
     reset,
+    setFocus,
   } = useForm<ActionFormValues>({
     resolver: zodResolver(actionSchema),
     defaultValues: initialValues,
   });
 
-  const teamFieldArray = useFieldArray({ control, name: 'equipoMejoramientoDetalle' });
-  const causesFieldArray = useFieldArray({ control, name: 'causasDefinitivas' });
   const planFieldArray = useFieldArray({ control, name: 'planMejoramiento' });
 
   useEffect(() => {
@@ -63,25 +64,34 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  const scopedProcess = currentUser?.permissions.canAdmin ? '' : (currentUser?.proceso ?? '');
+  const isAdmin = Boolean(currentUser?.permissions.canAdmin);
+  const hasGlobalProcessScope = Boolean(isAdmin || currentUser?.rol === 'OCI');
+  const scopedProcesses = hasGlobalProcessScope ? [] : getProcessNamesForAccess(currentUser?.proceso ?? '');
   const originOptions = uniqueOptionSorted(parameters?.origenes ?? []);
   const selectedType = useWatch({ control, name: 'tipoAccion' }) ?? '';
   const normalizedType = selectedType.toLowerCase();
   const isImprovement = normalizedType.includes('mejora');
-  const isCorrective = normalizedType.includes('correctiva');
   const typeOptions = (parameters?.tiposAccion ?? []).filter((option) => !option.toLowerCase().includes('preventiva'));
-  const processOptions = scopedProcess
-    ? [scopedProcess]
-    : uniqueOptionSorted(parameters?.procesos?.length ? parameters.procesos : PROCESSES.map((item) => item.code));
+  const processOptions = scopedProcesses.length
+    ? scopedProcesses
+    : uniqueOptionSorted(
+        [...(parameters?.procesos ?? []), ...PROCESSES.map((item) => item.name)].filter(
+          (option) => !isLegacyProcessCode(option) && optionIdentity(option) !== 'otro proceso',
+        ),
+      );
   const peopleOptions = parameters?.personas ?? [];
-  const leaderOptions = parameters?.lideresProceso ?? [];
+  const leaderOptions = uniqueOptionSorted(
+    [...(parameters?.lideresProceso ?? []), ...PROCESS_LEADERS].filter((option) => optionIdentity(option) !== 'lider del proceso'),
+  );
   const siplagOptions = parameters?.lideresSiplag ?? [];
-  const auditorOptions = parameters?.auditores ?? [];
-  const isOperationalUser = Boolean(currentUser?.rol && currentUser.rol !== 'CONSULTA' && currentUser.rol !== 'ANONIMO');
+  const currentRole = currentUser?.rol;
+  const currentState = initialValues.estadoActual;
+  const isCreator = currentRole === 'CREADOR';
+  const isCreatorCreate = mode === 'create' && isCreator && Boolean(currentUser?.permissions.canCreate);
 
   const canEditPhase = (phase: FormPhase) => {
-    const currentState = initialValues.estadoActual;
-    const isCreatorPhaseOnCreate = mode === 'create' && isOperationalUser && (phase === 'registro' || phase === 'analisis');
+    if (isAdmin) return true;
+    const isCreatorPhaseOnCreate = isCreatorCreate && (phase === 'registro' || phase === 'analisis' || phase === 'plan');
     const phaseIsActive =
       mode === 'create'
         ? phase === 'registro' || phase === 'analisis'
@@ -91,7 +101,6 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
           (phase === 'validacion' && currentState === 'VALIDACION') ||
           (phase === 'oci' && currentState === 'REVISION_OCI');
     if (isCreatorPhaseOnCreate) return true;
-    if (currentUser?.permissions.canAdmin) return phaseIsActive;
     const permissions = currentUser?.permissions;
     return phaseIsActive && Boolean(
       (phase === 'registro' && permissions?.canEditRegistro) ||
@@ -101,9 +110,21 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         (phase === 'oci' && permissions?.canEditOci),
     );
   };
-  const canEditAnalysis = canEditPhase('analisis');
-  const canEditPlan = canEditPhase('plan') && !initialValues.fechasBloqueadas;
+  const canEditPlanDefinition =
+    isAdmin || (isCreator && (mode === 'create' || currentState === 'REGISTRO' || currentState === 'ANALISIS'));
+  const canEditPlanExecution =
+    isAdmin || (mode === 'edit' && currentState === 'PLAN_ACCION' && Boolean(currentUser?.permissions.canEditPlan));
+  const canEditPlanValidation =
+    isAdmin || (mode === 'edit' && currentState === 'VALIDACION' && Boolean(currentUser?.permissions.canEditValidacion));
+  const canEditAnyPlanField = canEditPlanDefinition || canEditPlanExecution || canEditPlanValidation;
+  const canAddOrRemoveActivities = canEditPlanDefinition && (!initialValues.fechasBloqueadas || isAdmin);
+  const showExecutionFields =
+    isAdmin || (mode === 'edit' && ['PLAN_ACCION', 'VALIDACION', 'REVISION_OCI', 'CERRADA'].includes(currentState));
+  const showValidationFields =
+    isAdmin || (mode === 'edit' && ['VALIDACION', 'REVISION_OCI', 'CERRADA'].includes(currentState));
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [validationMessage, setValidationMessage] = useState('');
+  const [pendingSubmitValues, setPendingSubmitValues] = useState<ActionFormValues | null>(null);
 
   const phaseOrder: FormPhase[] = ['registro', 'analisis', 'plan', 'validacion', 'oci'];
   const phaseIndex = phaseOrder.reduce<Record<FormPhase, number>>((acc, phase, index) => {
@@ -119,9 +140,17 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
       : initialValues.estadoActual === 'CERRADA'
         ? phaseIndex.oci
         : phaseIndex[currentPhase];
+  const hasRegisteredActivities = initialValues.planMejoramiento.some(
+    (activity) => activity.actividad || activity.responsable || activity.fechaApertura || activity.fechaCierre,
+  );
 
   const getPhaseAccess = (phase: FormPhase): PhaseAccess => {
-    const isEditable = canEditPhase(phase) && !(phase === 'plan' && initialValues.fechasBloqueadas);
+    if (phase === 'plan') {
+      if (canEditAnyPlanField) return 'editable';
+      if (phaseIndex[phase] <= reachedPhaseIndex || hasRegisteredActivities) return 'readonly';
+      return 'locked';
+    }
+    const isEditable = canEditPhase(phase);
     if (isEditable) return 'editable';
     if (phaseIndex[phase] <= reachedPhaseIndex) return 'readonly';
     return 'locked';
@@ -137,8 +166,8 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         { name: 'origen', label: 'Origen', type: 'select', options: originOptions, required: true },
         { name: 'tipoAccion', label: 'Tipo de accion', type: 'select', options: typeOptions, required: true },
         { name: 'proceso', label: 'Proceso o subproceso', type: 'select', options: processOptions, required: true },
-        { name: 'identificadoPor', label: 'Identificado por', type: 'datalist', options: peopleOptions },
-        { name: 'liderProceso', label: 'Lider del proceso', type: 'datalist', options: leaderOptions },
+        { name: 'identificadoPor', label: 'Registrado por', type: 'datalist', options: peopleOptions },
+        { name: 'liderProceso', label: 'Lider del proceso', type: 'select', options: leaderOptions },
         { name: 'descripcion', label: 'Descripcion', type: 'textarea', full: true, required: true },
       ],
     },
@@ -147,48 +176,20 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
       phase: 'analisis',
       hidden: isImprovement,
       fields: [
-        { name: 'equipoMejoramiento', label: 'Equipo de mejoramiento', type: 'textarea', full: true },
         { name: 'identificacionCausas', label: 'Identificacion de causas', type: 'textarea', full: true },
         { name: 'causaRaiz', label: 'Causa raiz', type: 'textarea', full: true },
-        { name: 'correccion', label: 'Correccion', type: 'textarea', full: true },
-        { name: 'accionContencion', label: 'Accion de contencion', type: 'textarea', full: true, required: isCorrective, hidden: !isCorrective },
+        { name: 'accionContencion', label: 'Accion de contencion', type: 'textarea', full: true },
       ],
     },
     {
-      title: 'C. Plan de actividades',
-      phase: 'plan',
-      fields: [
-        { name: 'accion', label: 'Accion', type: 'textarea', full: true, required: true },
-        { name: 'responsable', label: 'Responsable', type: 'datalist', options: peopleOptions },
-        { name: 'fechaApertura', label: 'Fecha de apertura', type: 'date' },
-        { name: 'fechaCierre', label: 'Fecha de cierre', type: 'date' },
-        { name: 'fechaInicioAccion', label: 'Fecha inicio accion', type: 'date' },
-        { name: 'fechaFinAccion', label: 'Fecha fin accion', type: 'date' },
-        { name: 'presupuesto', label: 'Presupuesto', type: 'number' },
-      ],
-    },
-    {
-      title: 'Revision y validacion',
-      phase: 'validacion',
-      fields: [
-        { name: 'revisionResponsable', label: 'Responsable revision', type: 'datalist', options: siplagOptions },
-        { name: 'revisionFecha', label: 'Fecha ejecucion revision', type: 'date' },
-        { name: 'revisionObservacion', label: 'Observacion revision', type: 'textarea', full: true },
-        { name: 'validacionResponsable', label: 'Responsable validacion', type: 'datalist', options: siplagOptions },
-        { name: 'validacionFecha', label: 'Fecha ejecucion validacion', type: 'date' },
-        { name: 'validacionObservacion', label: 'Observacion validacion', type: 'textarea', full: true },
-        { name: 'evidencia', label: 'Evidencia', type: 'textarea', full: true },
-      ],
-    },
-    {
-      title: 'D. Evaluacion de las acciones',
+      title: 'D. Evaluacion de la accion',
       phase: 'oci',
+      hidden: mode === 'create' && !isAdmin,
       fields: [
-        { name: 'auditorInterno', label: 'Auditor interno', type: 'datalist', options: auditorOptions },
+        { name: 'auditorInterno', label: 'Evaluador', type: 'text' },
         { name: 'fechaEvaluacion', label: 'Fecha de evaluacion', type: 'date' },
         { name: 'eficacia', label: 'Las acciones fueron eficaces', type: 'select', options: ['', 'SI', 'NO'] },
-        { name: 'evaluacionObservacion', label: 'Observacion evaluacion', type: 'textarea', full: true },
-        { name: 'recomendacionesFinales', label: 'Recomendaciones finales', type: 'textarea', full: true },
+        { name: 'evaluacionObservacion', label: 'Observacion de la accion', type: 'textarea', full: true },
       ],
     },
   ];
@@ -201,7 +202,33 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   };
 
   const submitHandler: SubmitHandler<ActionFormValues> = (values) => {
-    onSubmit(values);
+    setValidationMessage('');
+    setPendingSubmitValues(syncLegacyPlanFields(values));
+  };
+
+  function confirmSave() {
+    if (!pendingSubmitValues) return;
+    onSubmit(pendingSubmitValues);
+    setPendingSubmitValues(null);
+  }
+
+  const invalidSubmitHandler = (formErrors: FieldErrors<ActionFormValues>) => {
+    const messages = collectErrorMessages(formErrors);
+    const firstEditableError = findFirstEditableErrorField(formErrors, sections.filter((section) => !section.hidden));
+    setValidationMessage(
+      messages.length
+        ? `Revisa los campos pendientes: ${messages.slice(0, 4).join(' ')}`
+        : 'Revisa los campos obligatorios antes de guardar.',
+    );
+    setOpenSections((current) => ({
+      ...current,
+      ...getSectionsToOpenForErrors(formErrors, sections.filter((section) => !section.hidden)),
+      'plan-detail': Boolean(formErrors.planMejoramiento) || current['plan-detail'],
+    }));
+    window.setTimeout(() => {
+      document.querySelector('.feedback-message--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (firstEditableError) setFocus(firstEditableError);
+    }, 0);
   };
 
   function cancel() {
@@ -211,7 +238,10 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   }
 
   return (
-    <form className="stack" onSubmit={(event) => void handleSubmit(submitHandler)(event)}>
+    <form className="stack" noValidate onSubmit={(event) => void handleSubmit(submitHandler, invalidSubmitHandler)(event)}>
+      {validationMessage ? (
+        <FeedbackMessage type="error" title="No se pudo guardar" message={validationMessage} />
+      ) : null}
       <div className="phase-legend" aria-label="Guia de permisos del formulario">
         <LegendItem access="editable" />
         <LegendItem access="readonly" />
@@ -236,7 +266,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   mode={mode}
                   error={errors[field.name]?.message}
                   register={register}
-                  disabled={access !== 'editable' || (field.name === 'proceso' && Boolean(scopedProcess))}
+                  disabled={access !== 'editable' || (field.name === 'proceso' && scopedProcesses.length === 1)}
                 />
               );
             })}
@@ -244,155 +274,20 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         </PhaseAccordion>
       ))}
 
-      {!isImprovement ? (
-      <PhaseAccordion
-        access={getPhaseAccess('analisis')}
-        isOpen={isSectionOpen('team-detail', getPhaseAccess('analisis'))}
-        onToggle={() => toggleSection('team-detail', getPhaseAccess('analisis'))}
-        phase="analisis"
-        title="Miembros del Equipo de Mejoramiento Continuo"
-      >
-      <div className="form-dynamic-section">
-        <DynamicSectionHeader
-          description="Registra integrantes, previas y votacion como aparece en el seguimiento impreso."
-          onAdd={() => teamFieldArray.append({ nombre: '', previas: '', votacion: '' })}
-          disabled={!canEditAnalysis}
-        />
-        <div className="table-wrap form-table-wrap">
-          <table className="data-table form-edit-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Previas</th>
-                <th>Votacion</th>
-                <th aria-label="Acciones" />
-              </tr>
-            </thead>
-            <tbody>
-              {teamFieldArray.fields.length ? (
-                teamFieldArray.fields.map((field, index) => (
-                  <tr key={field.id}>
-                    <td>
-                      <input
-                        aria-label={`Nombre integrante ${index + 1}`}
-                        list="team-member-options"
-                        disabled={!canEditAnalysis}
-                        {...register(`equipoMejoramientoDetalle.${index}.nombre`)}
-                      />
-                    </td>
-                    <td>
-                      <input aria-label={`Previas integrante ${index + 1}`} disabled={!canEditAnalysis} {...register(`equipoMejoramientoDetalle.${index}.previas`)} />
-                    </td>
-                    <td>
-                      <input aria-label={`Votacion integrante ${index + 1}`} disabled={!canEditAnalysis} {...register(`equipoMejoramientoDetalle.${index}.votacion`)} />
-                    </td>
-                    <td>
-                      <button className="button button--ghost form-row-remove" type="button" disabled={!canEditAnalysis} onClick={() => teamFieldArray.remove(index)}>
-                        <Trash2 aria-hidden size={16} />
-                        <span className="sr-only">Quitar integrante</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <EmptyDynamicRow colSpan={4} label="Sin integrantes detallados." />
-              )}
-            </tbody>
-          </table>
-          <datalist id="team-member-options">
-            {peopleOptions.map((option) => <option key={option} value={option} />)}
-          </datalist>
-        </div>
-      </div>
-      </PhaseAccordion>
-      ) : null}
-
-      {!isImprovement ? (
-      <PhaseAccordion
-        access={getPhaseAccess('analisis')}
-        isOpen={isSectionOpen('causes-detail', getPhaseAccess('analisis'))}
-        onToggle={() => toggleSection('causes-detail', getPhaseAccess('analisis'))}
-        phase="analisis"
-        title="Definicion de Causas Definitivas"
-      >
-      <div className="form-dynamic-section">
-        <DynamicSectionHeader
-          description="Permite registrar causas finales con votos y puntaje."
-          onAdd={() => causesFieldArray.append({ causa: '', descripcion: '', votos: 0, puntaje: 0 })}
-          disabled={!canEditAnalysis}
-        />
-        <div className="table-wrap form-table-wrap">
-          <table className="data-table form-edit-table">
-            <thead>
-              <tr>
-                <th>Causa</th>
-                <th>Descripcion</th>
-                <th>Votos</th>
-                <th>Puntaje</th>
-                <th aria-label="Acciones" />
-              </tr>
-            </thead>
-            <tbody>
-              {causesFieldArray.fields.length ? (
-                causesFieldArray.fields.map((field, index) => (
-                  <tr key={field.id}>
-                    <td>
-                      <input aria-label={`Causa definitiva ${index + 1}`} disabled={!canEditAnalysis} {...register(`causasDefinitivas.${index}.causa`)} />
-                    </td>
-                    <td>
-                      <textarea aria-label={`Descripcion causa definitiva ${index + 1}`} disabled={!canEditAnalysis} {...register(`causasDefinitivas.${index}.descripcion`)} />
-                    </td>
-                    <td>
-                      <input
-                        aria-label={`Votos causa definitiva ${index + 1}`}
-                        min={0}
-                        type="number"
-                        disabled={!canEditAnalysis}
-                        {...register(`causasDefinitivas.${index}.votos`, { valueAsNumber: true })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        aria-label={`Puntaje causa definitiva ${index + 1}`}
-                        min={0}
-                        step="0.01"
-                        type="number"
-                        disabled={!canEditAnalysis}
-                        {...register(`causasDefinitivas.${index}.puntaje`, { valueAsNumber: true })}
-                      />
-                    </td>
-                    <td>
-                      <button className="button button--ghost form-row-remove" type="button" disabled={!canEditAnalysis} onClick={() => causesFieldArray.remove(index)}>
-                        <Trash2 aria-hidden size={16} />
-                        <span className="sr-only">Quitar causa</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <EmptyDynamicRow colSpan={5} label="Sin causas definitivas detalladas." />
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      </PhaseAccordion>
-      ) : null}
-
       <PhaseAccordion
         access={getPhaseAccess('plan')}
         isOpen={isSectionOpen('plan-detail', getPhaseAccess('plan'))}
         onToggle={() => toggleSection('plan-detail', getPhaseAccess('plan'))}
         phase="plan"
-        title="Plan de Mejoramiento"
+        title="C. Plan de actividades"
       >
       <div className="form-dynamic-section">
         <DynamicSectionHeader
-          description="Agrega una o varias actividades con revision y validacion por actividad."
+          description="Agrega la cantidad de actividades que necesites."
           onAdd={() =>
             planFieldArray.append({
               actividad: '',
-              fechaApertura: '',
+              fechaApertura: todayIso(),
               fechaCierre: '',
               presupuesto: 0,
               responsable: '',
@@ -402,9 +297,10 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
               validacionResponsable: '',
               validacionFecha: '',
               validacionObservacion: '',
+              evidencia: '',
             })
           }
-          disabled={!canEditPlan}
+          disabled={!canAddOrRemoveActivities}
         />
         <div className="dynamic-plan-grid">
           {planFieldArray.fields.length ? (
@@ -412,62 +308,75 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
               <article className="dynamic-plan-card" key={field.id}>
                 <div className="dynamic-plan-card__head">
                   <strong>Actividad {index + 1}</strong>
-                  <button className="button button--ghost form-row-remove" type="button" disabled={!canEditPlan} onClick={() => planFieldArray.remove(index)}>
+                  <button className="button button--ghost form-row-remove" type="button" disabled={!canAddOrRemoveActivities} onClick={() => planFieldArray.remove(index)}>
                     <Trash2 aria-hidden size={16} />
                     Quitar
                   </button>
                 </div>
                 <div className="form-grid">
-                  <NestedTextArea label="Actividad" name={`planMejoramiento.${index}.actividad`} register={register} disabled={!canEditPlan} full />
-                  <NestedInput label="Apertura" name={`planMejoramiento.${index}.fechaApertura`} register={register} disabled={!canEditPlan} type="date" />
-                  <NestedInput label="Cierre" name={`planMejoramiento.${index}.fechaCierre`} register={register} disabled={!canEditPlan} type="date" />
+                  <NestedTextArea label="Actividad" name={`planMejoramiento.${index}.actividad`} register={register} disabled={!canEditPlanDefinition} full />
+                  <NestedInput label="Fecha inicio actividad" name={`planMejoramiento.${index}.fechaApertura`} register={register} disabled={!canEditPlanDefinition} type="date" />
+                  <NestedInput label="Fecha fin actividad" name={`planMejoramiento.${index}.fechaCierre`} register={register} disabled={!canEditPlanDefinition} type="date" />
                   <NestedInput
-                    label="Presupuesto"
-                    name={`planMejoramiento.${index}.presupuesto`}
-                    register={register}
-                    type="number"
-                    disabled={!canEditPlan}
-                    valueAsNumber
-                  />
-                  <NestedInput
-                    label="Responsable"
-                    listId="plan-people-options"
+                    label="Responsable de actividad"
                     name={`planMejoramiento.${index}.responsable`}
                     register={register}
                     type="text"
-                    disabled={!canEditPlan}
+                    disabled={!canEditPlanDefinition}
                   />
-                  <NestedInput
-                    label="Responsable revision"
-                    listId="plan-siplag-options"
-                    name={`planMejoramiento.${index}.revisionResponsable`}
-                    register={register}
-                    type="text"
-                    disabled={!canEditPlan}
-                  />
-                  <NestedInput label="Fecha revision" name={`planMejoramiento.${index}.revisionFecha`} register={register} disabled={!canEditPlan} type="date" />
-                  <NestedTextArea label="Observacion revision" name={`planMejoramiento.${index}.revisionObservacion`} register={register} disabled={!canEditPlan} full />
-                  <NestedInput
-                    label="Responsable validacion"
-                    listId="plan-siplag-options"
-                    name={`planMejoramiento.${index}.validacionResponsable`}
-                    register={register}
-                    type="text"
-                    disabled={!canEditPlan}
-                  />
-                  <NestedInput label="Fecha validacion" name={`planMejoramiento.${index}.validacionFecha`} register={register} disabled={!canEditPlan} type="date" />
-                  <NestedTextArea label="Observacion validacion" name={`planMejoramiento.${index}.validacionObservacion`} register={register} disabled={!canEditPlan} full />
+                  {showExecutionFields ? (
+                    <>
+                      <EvidenceUrlField index={index} register={register} disabled={!canEditPlanExecution} />
+                      <NestedInput
+                        label="Fecha ejecucion"
+                        name={`planMejoramiento.${index}.revisionFecha`}
+                        register={register}
+                        type="date"
+                        disabled={!canEditPlanExecution}
+                      />
+                      <NestedTextArea
+                        label="Descripcion de la ejecucion"
+                        name={`planMejoramiento.${index}.revisionObservacion`}
+                        register={register}
+                        disabled={!canEditPlanExecution}
+                        full
+                      />
+                    </>
+                  ) : null}
+                  {showValidationFields ? (
+                    <>
+                      <NestedInput
+                        label="Responsable validacion"
+                        listId="plan-siplag-options"
+                        name={`planMejoramiento.${index}.validacionResponsable`}
+                        register={register}
+                        type="text"
+                        disabled={!canEditPlanValidation}
+                      />
+                      <NestedInput
+                        label="Fecha validacion"
+                        name={`planMejoramiento.${index}.validacionFecha`}
+                        register={register}
+                        disabled={!canEditPlanValidation}
+                        type="date"
+                      />
+                      <NestedTextArea
+                        label="Observacion validacion"
+                        name={`planMejoramiento.${index}.validacionObservacion`}
+                        register={register}
+                        disabled={!canEditPlanValidation}
+                        full
+                      />
+                    </>
+                  ) : null}
                 </div>
                 <NestedErrors errors={errors} index={index} />
               </article>
             ))
           ) : (
-            <p className="empty-dynamic-note">Sin actividades detalladas. Puedes agregar actividades para registrar varios controles Rev/Val.</p>
+            <p className="empty-dynamic-note">Sin actividades registradas. Usa Agregar para crear la primera actividad.</p>
           )}
         </div>
-        <datalist id="plan-people-options">
-          {peopleOptions.map((option) => <option key={option} value={option} />)}
-        </datalist>
         <datalist id="plan-siplag-options">
           {siplagOptions.map((option) => <option key={option} value={option} />)}
         </datalist>
@@ -484,7 +393,60 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
           Cancelar
         </button>
       </div>
+      {pendingSubmitValues ? (
+        <SaveConfirmationModal
+          isSaving={isSaving}
+          role={currentRole ?? 'CONSULTA'}
+          activityCount={pendingSubmitValues.planMejoramiento.filter((activity) => activity.actividad || activity.responsable).length}
+          onCancel={() => setPendingSubmitValues(null)}
+          onConfirm={confirmSave}
+        />
+      ) : null}
     </form>
+  );
+}
+
+function SaveConfirmationModal({
+  isSaving,
+  role,
+  activityCount,
+  onCancel,
+  onConfirm,
+}: {
+  isSaving: boolean;
+  role: string;
+  activityCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="save-modal" role="dialog" aria-modal="true" aria-labelledby="save-modal-title">
+      <button className="save-modal__backdrop" type="button" aria-label="Cancelar guardado" disabled={isSaving} onClick={onCancel} />
+      <section className="save-modal__card">
+        <div className="save-modal__head">
+          <span className="save-modal__icon">
+            <Save aria-hidden size={20} />
+          </span>
+          <div>
+            <h3 id="save-modal-title">Confirmar guardado</h3>
+            <p>Revisa que toda la informacion este correcta antes de guardar.</p>
+          </div>
+        </div>
+        <div className="save-modal__summary">
+          <span>Rol: {role}</span>
+          <span>Actividades: {activityCount}</span>
+        </div>
+        <div className="save-modal__actions">
+          <button className="button button--secondary" type="button" disabled={isSaving} onClick={onCancel}>
+            Cancelar
+          </button>
+          <button className="button button--primary" type="button" disabled={isSaving} onClick={onConfirm}>
+            <Save aria-hidden size={18} />
+            {isSaving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -494,6 +456,46 @@ function stateToPhase(state: ActionFormValues['estadoActual']): FormPhase {
   if (state === 'VALIDACION') return 'validacion';
   if (state === 'REVISION_OCI' || state === 'CERRADA') return 'oci';
   return 'registro';
+}
+
+function collectErrorMessages(errors: unknown): string[] {
+  const messages: string[] = [];
+  if (Array.isArray(errors)) {
+    errors.forEach((item) => messages.push(...collectErrorMessages(item)));
+    return Array.from(new Set(messages));
+  }
+  if (!errors || typeof errors !== 'object') return [];
+  if ('message' in errors) {
+    const message = errors.message;
+    if (typeof message === 'string') return [message];
+    if (typeof message === 'number') return [String(message)];
+  }
+  Object.values(errors).forEach((error) => messages.push(...collectErrorMessages(error)));
+  return Array.from(new Set(messages));
+}
+
+function getSectionsToOpenForErrors(
+  errors: FieldErrors<ActionFormValues>,
+  sections: Array<{ title: string; phase: FormPhase; fields: FieldConfig[] }>,
+): Record<string, boolean> {
+  const open: Record<string, boolean> = {};
+  sections.forEach((section) => {
+    if (section.fields.some((field) => Boolean(errors[field.name]))) {
+      open[section.title] = true;
+    }
+  });
+  return open;
+}
+
+function findFirstEditableErrorField(
+  errors: FieldErrors<ActionFormValues>,
+  sections: Array<{ title: string; phase: FormPhase; fields: FieldConfig[] }>,
+): FieldPath<ActionFormValues> | null {
+  for (const section of sections) {
+    const field = section.fields.find((item) => Boolean(errors[item.name]));
+    if (field) return field.name;
+  }
+  return null;
 }
 
 function getPhaseLabel(phase: FormPhase) {
@@ -515,6 +517,41 @@ function getAccessMeta(access: PhaseAccess): { label: string; hint: string; Icon
     return { label: 'Solo lectura', hint: 'Disponible para revisar', Icon: Eye };
   }
   return { label: 'Bloqueada', hint: 'Se habilita en otra fase', Icon: Lock };
+}
+
+function syncLegacyPlanFields(values: ActionFormValues): ActionFormValues {
+  const activities = values.planMejoramiento.map((activity) => ({
+    ...activity,
+    revisionResponsable: activity.responsable,
+    evidencia: activity.evidencia ?? '',
+  }));
+  const firstActivity = activities.find((activity) => activity.actividad || activity.responsable || activity.fechaApertura || activity.fechaCierre);
+  const lastEndDate = [...activities].reverse().find((activity) => activity.fechaCierre)?.fechaCierre ?? '';
+  const totalBudget = activities.reduce((total, activity) => total + Number(activity.presupuesto || 0), 0);
+
+  return {
+    ...values,
+    equipoMejoramiento: '',
+    equipoMejoramientoDetalle: [],
+    causasDefinitivas: [],
+    correccion: '',
+    accion: firstActivity?.actividad ?? values.accion,
+    responsable: firstActivity?.responsable ?? values.responsable,
+    fechaApertura: firstActivity?.fechaApertura ?? values.fechaApertura,
+    fechaCierre: lastEndDate || firstActivity?.fechaCierre || values.fechaCierre,
+    fechaInicioAccion: firstActivity?.fechaApertura ?? values.fechaInicioAccion,
+    fechaFinAccion: lastEndDate || firstActivity?.fechaCierre || values.fechaFinAccion,
+    presupuesto: totalBudget,
+    revisionResponsable: firstActivity?.responsable ?? values.revisionResponsable,
+    revisionFecha: firstActivity?.revisionFecha ?? values.revisionFecha,
+    revisionObservacion: firstActivity?.revisionObservacion ?? values.revisionObservacion,
+    validacionResponsable: firstActivity?.validacionResponsable ?? values.validacionResponsable,
+    validacionFecha: firstActivity?.validacionFecha ?? values.validacionFecha,
+    validacionObservacion: firstActivity?.validacionObservacion ?? values.validacionObservacion,
+    evidencia: firstActivity?.evidencia ?? values.evidencia,
+    recomendacionesFinales: '',
+    planMejoramiento: activities,
+  };
 }
 
 function PhaseAccordion({
@@ -594,16 +631,6 @@ function DynamicSectionHeader({
   );
 }
 
-function EmptyDynamicRow({ colSpan, label }: { colSpan: number; label: string }) {
-  return (
-    <tr>
-      <td className="empty-dynamic-cell" colSpan={colSpan}>
-        {label}
-      </td>
-    </tr>
-  );
-}
-
 function NestedInput({
   label,
   name,
@@ -616,7 +643,7 @@ function NestedInput({
   label: string;
   name: `planMejoramiento.${number}.${keyof ActionFormValues['planMejoramiento'][number]}`;
   register: UseFormRegister<ActionFormValues>;
-  type: 'text' | 'date' | 'number';
+  type: 'text' | 'date' | 'number' | 'url';
   listId?: string;
   valueAsNumber?: boolean;
   disabled?: boolean;
@@ -634,6 +661,36 @@ function NestedInput({
         disabled={disabled}
         {...register(name, valueAsNumber ? { valueAsNumber: true } : undefined)}
       />
+    </div>
+  );
+}
+
+function EvidenceUrlField({
+  index,
+  register,
+  disabled,
+}: {
+  index: number;
+  register: UseFormRegister<ActionFormValues>;
+  disabled?: boolean;
+}) {
+  const name = `planMejoramiento.${index}.evidencia` as const;
+  const id = name.replaceAll('.', '-');
+  return (
+    <div className="form-field form-field--full evidence-url-field">
+      <div className="evidence-url-field__head">
+        <label htmlFor={id}>URL de evidencia</label>
+        <button className="button button--secondary evidence-url-field__button" type="button" disabled>
+          <ExternalLink aria-hidden size={16} />
+          Abrir Drive
+        </button>
+      </div>
+      <p className="evidence-url-field__instructions">
+        Abre el Drive, crea una carpeta con el numero de la accion, por ejemplo Acc_400. Dentro de esa carpeta crea una
+        subcarpeta por cada actividad, por ejemplo Act_400_001. Copia y pega aqui la URL de la subcarpeta de la
+        actividad, no la URL de la carpeta general.
+      </p>
+      <input id={id} type="url" placeholder="https://drive.google.com/..." disabled={disabled} {...register(name)} />
     </div>
   );
 }
@@ -687,8 +744,15 @@ interface FormFieldProps {
 function FormField({ field, mode, error, register, disabled: phaseDisabled }: FormFieldProps) {
   const id = `field-${field.name}`;
   const listId = `${id}-options`;
-  const common = register(field.name, field.type === 'number' ? { valueAsNumber: true } : undefined);
-  const disabled = phaseDisabled || field.name === 'id' || (field.name === 'estado' && mode === 'create');
+  const common = register(
+    field.name,
+    field.type === 'number'
+      ? {
+          setValueAs: (value) => (value === '' ? undefined : Number(value)),
+        }
+      : undefined,
+  );
+  const disabled = phaseDisabled || (field.name === 'estado' && mode === 'create');
 
   return (
     <div className={`form-field ${field.full ? 'form-field--full' : ''}`}>
@@ -700,6 +764,7 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled }: Fo
         <textarea id={id} disabled={disabled} {...common} />
       ) : field.type === 'select' ? (
         <select id={id} disabled={disabled} {...common}>
+          {!field.required ? <option value="">Seleccione...</option> : null}
           {field.options?.map((option) => (
             <option key={option || 'empty'} value={option}>
               {option || 'Sin evaluar'}

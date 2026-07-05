@@ -32,11 +32,12 @@ const planActivitySchema = z.object({
   validacionResponsable: optionalText,
   validacionFecha: dateString,
   validacionObservacion: optionalText,
+  evidencia: optionalText,
 });
 
 export const actionSchema = z
   .object({
-    id: z.number().int().positive().optional(),
+    id: z.number().int('El numero debe ser entero').positive('El numero debe ser positivo').optional(),
     fechaElaboracion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha obligatoria'),
     origen: z.string().min(1, 'Seleccione el origen'),
     tipoAccion: z.string().min(1, 'Seleccione el tipo de accion'),
@@ -113,30 +114,50 @@ export const actionSchema = z
 
     const requiresPlan = value.estadoActual === 'PLAN_ACCION' || value.fechasBloqueadas || ['VALIDACION', 'REVISION_OCI', 'CERRADA'].includes(value.estadoActual);
     if (requiresPlan) {
-      const requiredPlanFields: Array<[keyof typeof value, string]> = [
-        ['accion', 'Registre la accion o plan de actividades'],
-        ['fechaInicioAccion', 'Registre la fecha de inicio'],
-        ['fechaFinAccion', 'Registre la fecha fin'],
-      ];
+      const hasPlanActivity = value.planMejoramiento.some((activity) => activity.actividad.trim() && activity.fechaApertura && activity.fechaCierre);
+      if (!hasPlanActivity) {
+        const requiredPlanFields: Array<[keyof typeof value, string]> = [
+          ['accion', 'Registre la actividad'],
+          ['fechaInicioAccion', 'Registre la fecha de inicio de actividad'],
+          ['fechaFinAccion', 'Registre la fecha fin de actividad'],
+        ];
 
-      requiredPlanFields.forEach(([field, message]) => {
-        const rawValue = value[field];
-        const textValue = typeof rawValue === 'string' ? rawValue : '';
-        if (!textValue.trim()) {
+        requiredPlanFields.forEach(([field, message]) => {
+          const rawValue = value[field];
+          const textValue = typeof rawValue === 'string' ? rawValue : '';
+          if (!textValue.trim()) {
+            ctx.addIssue({
+              code: 'custom',
+              message,
+              path: [field],
+            });
+          }
+        });
+      }
+
+      value.planMejoramiento.forEach((activity, index) => {
+        const hasAnyActivityData = activity.actividad.trim() || activity.responsable.trim() || activity.fechaApertura || activity.fechaCierre;
+        if (hasAnyActivityData && !activity.actividad.trim()) {
           ctx.addIssue({
             code: 'custom',
-            message,
-            path: [field],
+            message: 'Registre la actividad',
+            path: ['planMejoramiento', index, 'actividad'],
           });
         }
-      });
-    }
-
-    if (value.tipoAccion.toLowerCase().includes('correctiva') && !value.accionContencion.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Registre la accion de contencion',
-        path: ['accionContencion'],
+        if (hasAnyActivityData && !activity.fechaApertura) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Registre la fecha de inicio de actividad',
+            path: ['planMejoramiento', index, 'fechaApertura'],
+          });
+        }
+        if (hasAnyActivityData && !activity.fechaCierre) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Registre la fecha fin de actividad',
+            path: ['planMejoramiento', index, 'fechaCierre'],
+          });
+        }
       });
     }
 

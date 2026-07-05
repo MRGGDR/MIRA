@@ -2,6 +2,53 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.1.0] - 2026-07-05
+
+Actualizacion del flujo de registro, seguimiento y administracion de usuarios para separar mejor las responsabilidades por rol y dejar la interfaz alineada con el formato MIRA.
+
+### Flujo por roles
+
+- Se separo el formulario de creador frente a las vistas de revision, validacion y OCI.
+- Se limito a `CREADOR` al registro, analisis de causas y plan de actividades.
+- Se habilito a `REV` para diligenciar solo la ejecucion de actividades que le correspondan.
+- Se habilito a `VAL` para diligenciar solo la validacion de actividades que le correspondan.
+- Se habilito a `OCI` como perfil global para consultar acciones de todos los procesos y diligenciar la evaluacion final.
+- Se ajusto el dashboard y la bandeja de acciones para mostrar pendientes segun el rol y la etapa actual.
+- Se corrigio el avance de etapa para pasar de ejecucion a validacion y luego a revision OCI cuando las actividades ya estan diligenciadas.
+
+### Formulario de acciones
+
+- Se actualizo la descripcion del hallazgo con fecha automatica del dia y numero de accion editable de forma manual.
+- Se agregaron listas ordenadas para procesos y lideres de proceso.
+- Se cambio `Identificado por` a `Registrado por`.
+- Se cambio `Correccion` a `Accion de contencion`.
+- Se oculto el analisis de causas cuando el tipo es accion de mejora.
+- Se quitaron las secciones de miembros del equipo de mejoramiento continuo, definicion de causas definitivas y plan de mejoramiento.
+- Se reemplazo `Accion` por `Actividad` en el plan.
+- Se permitio agregar multiples actividades en una misma accion.
+- Se cambio `Responsable` por `Responsable de actividad` como campo abierto.
+- Se dejo la evidencia como campo de URL con instrucciones para organizar carpetas en Drive.
+- Se cambio revision por ejecucion y observacion revision por descripcion de la ejecucion.
+- Se cambio `Auditor interno` por `Evaluador` como campo abierto.
+- Se cambio `Observacion` por `Observacion de la accion`.
+- Se retiro el campo de recomendaciones finales.
+
+### Configuracion de usuarios
+
+- Se agrego una pagina de `Configuracion` visible solo para administradores.
+- Se permitio listar usuarios registrados.
+- Se agrego creacion de usuarios con identificador, nombre, rol, proceso, estado y contrasena.
+- Se agrego edicion de usuarios sin mostrar la contrasena actual, permitiendo solo cambiarla.
+- Se permitio iniciar sesion con el identificador configurado en la hoja de usuarios, sin exigir formato de correo.
+
+### Experiencia y validacion
+
+- Se reemplazo la confirmacion nativa del navegador por un modal profesional antes de guardar.
+- Se agregaron mensajes de exito y error al guardar acciones.
+- Se integro el loader institucional durante operaciones de guardado.
+- Se aumento el tiempo de espera del inicio de sesion y se mejoro el mensaje cuando Apps Script tarda en responder.
+- Se ajusto el formato visual de fechas a `DD/MM/YYYY`.
+
 ## [1.0.0] - 2026-06-16
 
 Primera version funcional del sistema. Esta version construye la aplicacion completa desde cero: frontend React, backend Apps Script, modelo de datos en Google Sheets, autenticacion, control de acceso, dashboard, modulo de reportes, flujo documental, documentacion y preparacion para despliegue en Vercel.

@@ -30,6 +30,7 @@ export interface ImprovementPlanActivity {
   validacionResponsable: string;
   validacionFecha: string;
   validacionObservacion: string;
+  evidencia: string;
 }
 
 export interface CorrectiveAction {
@@ -146,6 +147,32 @@ export interface CurrentUser {
     canEditOci?: boolean;
     canNotifyOci?: boolean;
   };
+}
+
+export interface ManagedUser {
+  email: string;
+  nombre: string;
+  proceso: string;
+  rol: UserRole;
+  activo: boolean;
+}
+
+export interface CreateUserInput {
+  email: string;
+  nombre: string;
+  proceso: string;
+  rol: UserRole;
+  password: string;
+  activo: boolean;
+}
+
+export interface UpdateUserInput {
+  email: string;
+  nombre: string;
+  proceso: string;
+  rol: UserRole;
+  password?: string;
+  activo: boolean;
 }
 
 export interface AuthSession {

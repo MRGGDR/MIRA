@@ -1,5 +1,5 @@
 import { env } from '@/config/env';
-import { PROCESSES } from '@/config/processes';
+import { PROCESS_LEADERS, PROCESSES } from '@/config/processes';
 import type { ApiResponse } from '@/types/api';
 import type {
   ActionFilters,
@@ -7,11 +7,14 @@ import type {
   AuthSession,
   AuditRecord,
   CorrectiveAction,
+  CreateUserInput,
   CreateActionInput,
   CurrentUser,
   DashboardStats,
+  ManagedUser,
   Parameters,
   UpdateActionInput,
+  UpdateUserInput,
 } from '@/features/actions/types';
 import { isActionExpired } from '@/features/actions/utils/status';
 
@@ -37,7 +40,8 @@ interface RequestPayload {
   data?: unknown;
 }
 
-const TIMEOUT_MS = 20000;
+const DEFAULT_TIMEOUT_MS = 30000;
+const LOGIN_TIMEOUT_MS = 90000;
 const AUTH_TOKEN_KEY = 'neogestion.authToken';
 
 export function getStoredAuthToken(): string {
@@ -53,7 +57,7 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function request<TData>(payload: RequestPayload, safeToRetry = false): Promise<TData> {
+async function request<TData>(payload: RequestPayload, safeToRetry = false, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<TData> {
   const authToken = getStoredAuthToken();
   const requestPayload = authToken ? { ...payload, authToken } : payload;
   if (env.useMocks) {
@@ -72,7 +76,7 @@ async function request<TData>(payload: RequestPayload, safeToRetry = false): Pro
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(env.apiUrl, {
@@ -112,7 +116,10 @@ async function request<TData>(payload: RequestPayload, safeToRetry = false): Pro
 
   if (lastError instanceof ApiClientError) throw lastError;
   if (lastError instanceof DOMException && lastError.name === 'AbortError') {
-    throw new ApiClientError('La solicitud supero el tiempo de espera.', 'REQUEST_TIMEOUT');
+    throw new ApiClientError(
+      'La solicitud supero el tiempo de espera. Revisa la conexion e intenta de nuevo; si es el primer ingreso despues de publicar Apps Script, puede tardar un poco mas.',
+      'REQUEST_TIMEOUT',
+    );
   }
   throw new ApiClientError('No fue posible comunicarse con Apps Script.', 'NETWORK_ERROR');
 }
@@ -158,9 +165,12 @@ function parseApiResponse<TData>(rawResponse: string): ApiResponse<TData> {
 }
 
 export const apiClient = {
-  login: (email: string, password: string) => request<AuthSession>({ action: 'login', data: { email, password } }),
+  login: (email: string, password: string) => request<AuthSession>({ action: 'login', data: { email, password } }, false, LOGIN_TIMEOUT_MS),
   me: () => request<CurrentUser>({ action: 'me' }, true),
   bootstrap: () => request<{ parameters: Parameters; currentUser: CurrentUser; stats: DashboardStats }>({ action: 'bootstrap' }, true),
+  listUsers: () => request<ManagedUser[]>({ action: 'listUsers' }, true),
+  createUser: (data: CreateUserInput) => request<ManagedUser>({ action: 'createUser', data }),
+  updateUser: (data: UpdateUserInput) => request<ManagedUser>({ action: 'updateUser', data }),
   getParameters: () => request<Parameters>({ action: 'getParameters' }, true),
   listActions: (filters: ActionFilters) => request<ActionListResponse>({ action: 'listActions', params: { filters } }, true),
   listAllActions,
@@ -175,9 +185,9 @@ export const apiClient = {
 const mockParameters: Parameters = {
   origenes: ['Auditoria externa', 'Auditoria interna', 'Entes de control', 'Indicadores', 'PQRS', 'Otro'],
   tiposAccion: ['Accion correctiva', 'Accion preventiva', 'Accion de mejora'],
-  procesos: PROCESSES.map((process) => process.code),
+  procesos: PROCESSES.map((process) => process.name),
   personas: ['Ana Rodriguez', 'Carlos Perez', 'Lorena Cardenas'],
-  lideresProceso: ['Lorena Cardenas', 'Beatriz Parra'],
+  lideresProceso: PROCESS_LEADERS,
   lideresSiplag: ['Beatriz Parra', 'Carlos Perez'],
   auditores: ['David Vargas', 'Jairo Abaunza'],
 };
@@ -201,13 +211,23 @@ const mockCurrentUser: CurrentUser = {
   },
 };
 
+const mockUsers: ManagedUser[] = [
+  {
+    email: 'admin',
+    nombre: 'Admin local',
+    proceso: '',
+    rol: 'ADMIN',
+    activo: true,
+  },
+];
+
 const mockActions: CorrectiveAction[] = [
   {
     id: 1,
     fechaElaboracion: '2026-05-15',
     origen: 'Auditoria interna',
     tipoAccion: 'Accion correctiva',
-    proceso: 'GG',
+    proceso: 'Gestión Gerencial (Dirección General)',
     identificadoPor: 'Carlos Perez',
     liderProceso: 'Lorena Cardenas',
     descripcion: 'Hallazgo inicial de referencia para validar la interfaz.',
@@ -237,6 +257,7 @@ const mockActions: CorrectiveAction[] = [
         validacionResponsable: 'Carlos Perez',
         validacionFecha: '',
         validacionObservacion: '',
+        evidencia: 'Carpeta de evidencia',
       },
     ],
     responsable: 'Lorena Cardenas',
@@ -278,6 +299,37 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
       return { token: 'mock-token', user: mockCurrentUser } as TData;
     case 'me':
       return mockCurrentUser as TData;
+    case 'listUsers':
+      return mockUsers as TData;
+    case 'createUser': {
+      const data = payload.data as CreateUserInput;
+      if (mockUsers.some((user) => user.email.toLowerCase() === data.email.toLowerCase())) {
+        throw new ApiClientError('Ya existe un usuario con ese identificador.', 'USER_ALREADY_EXISTS');
+      }
+      const user: ManagedUser = {
+        email: data.email.trim(),
+        nombre: data.nombre.trim(),
+        proceso: data.proceso.trim(),
+        rol: data.rol,
+        activo: data.activo,
+      };
+      mockUsers.push(user);
+      return user as TData;
+    }
+    case 'updateUser': {
+      const data = payload.data as UpdateUserInput;
+      const index = mockUsers.findIndex((user) => user.email.toLowerCase() === data.email.toLowerCase());
+      if (index < 0) throw new ApiClientError('No se encontro el usuario.', 'USER_NOT_FOUND');
+      const updated: ManagedUser = {
+        email: mockUsers[index].email,
+        nombre: data.nombre.trim(),
+        proceso: data.rol === 'ADMIN' ? '' : data.proceso.trim(),
+        rol: data.rol,
+        activo: data.activo,
+      };
+      mockUsers[index] = updated;
+      return updated as TData;
+    }
     case 'getParameters':
       return mockParameters as TData;
     case 'getStats':
@@ -301,11 +353,15 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
     }
     case 'createAction': {
       const data = payload.data as CreateActionInput;
+      const requestedId = data.id ?? Math.max(...mockActions.map((action) => action.id)) + 1;
+      if (mockActions.some((action) => action.id === requestedId)) {
+        throw new ApiClientError('Ya existe una accion con ese numero.', 'DUPLICATE_ID', { id: requestedId });
+      }
       const created: CorrectiveAction = {
         ...data,
-        id: Math.max(...mockActions.map((action) => action.id)) + 1,
+        id: requestedId,
         estado: data.eficacia ? 'CERRADA' : 'ABIERTA',
-        estadoActual: data.estadoActual ?? 'REGISTRO',
+        estadoActual: getCreatedMockStage(data),
         correoEnviado: Boolean(data.correoEnviado),
         fechasBloqueadas: Boolean(data.fechasBloqueadas),
         accionContencion: data.accionContencion ?? '',
@@ -321,7 +377,7 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
       const updated: CorrectiveAction = {
         ...data,
         estado: data.eficacia ? 'CERRADA' : 'ABIERTA',
-        estadoActual: data.estadoActual ?? 'REGISTRO',
+        estadoActual: getUpdatedMockStage(data),
         correoEnviado: Boolean(data.correoEnviado),
         fechasBloqueadas: Boolean(data.fechasBloqueadas),
         accionContencion: data.accionContencion ?? '',
@@ -366,6 +422,40 @@ function filterActions(actions: CorrectiveAction[], filters: ActionFilters): Cor
   });
 }
 
+function getCreatedMockStage(data: CreateActionInput): CorrectiveAction['estadoActual'] {
+  if (hasMockPlanActivity(data)) return 'PLAN_ACCION';
+  if ((data.tipoAccion ?? '').toLowerCase().includes('mejora')) return 'PLAN_ACCION';
+  return 'ANALISIS';
+}
+
+function getUpdatedMockStage(data: UpdateActionInput): CorrectiveAction['estadoActual'] {
+  if (data.eficacia === 'SI') return 'CERRADA';
+  if (areMockActivitiesValidated(data)) return 'REVISION_OCI';
+  if (data.correoEnviado) return 'REVISION_OCI';
+  if (data.fechasBloqueadas || areMockActivitiesExecuted(data)) return 'VALIDACION';
+  return data.estadoActual ?? 'REGISTRO';
+}
+
+function hasMockPlanActivity(data: CreateActionInput) {
+  return Boolean(
+    data.planMejoramiento?.some((activity) => activity.actividad.trim() && activity.fechaApertura && activity.fechaCierre) ||
+      (data.accion?.trim() && (data.fechaInicioAccion || data.fechaApertura) && (data.fechaFinAccion || data.fechaCierre)),
+  );
+}
+
+function areMockActivitiesExecuted(data: CreateActionInput) {
+  const activities = data.planMejoramiento ?? [];
+  return activities.length > 0 && activities.every((activity) => activity.revisionFecha && activity.revisionObservacion.trim());
+}
+
+function areMockActivitiesValidated(data: CreateActionInput) {
+  const activities = data.planMejoramiento ?? [];
+  return (
+    activities.length > 0 &&
+    activities.every((activity) => activity.validacionResponsable.trim() && activity.validacionFecha && activity.validacionObservacion.trim())
+  );
+}
+
 function buildMockStats(): DashboardStats {
   const vencidas = mockActions.filter(isActionExpired).length;
   return {
@@ -376,8 +466,8 @@ function buildMockStats(): DashboardStats {
     eficaces: mockActions.filter((action) => action.eficacia === 'SI').length,
     noEficaces: mockActions.filter((action) => action.eficacia === 'NO').length,
     porProceso: PROCESSES.map((process) => ({
-      proceso: process.code,
-      total: mockActions.filter((action) => action.proceso === process.code).length,
+      proceso: process.name,
+      total: mockActions.filter((action) => action.proceso === process.name).length,
     })).filter((item) => item.total > 0),
     recientes: mockActions.slice(0, 5),
   };

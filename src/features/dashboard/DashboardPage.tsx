@@ -34,7 +34,7 @@ import { AccessContextBanner } from '@/components/common/AccessContextBanner';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
-import { getProcessName, PROCESSES } from '@/config/processes';
+import { getProcessName, getProcessNamesForAccess, PROCESSES } from '@/config/processes';
 import { actionQueries } from '@/features/actions/api/actionQueries';
 import type { CorrectiveAction } from '@/features/actions/types';
 import { getVisualStatus, isActionExpired } from '@/features/actions/utils/status';
@@ -166,7 +166,8 @@ export function DashboardPage() {
   const actionsQuery = useQuery(actionQueries.all());
   const parametersQuery = useQuery(actionQueries.parameters());
   const { user } = useAuth();
-  const scopedProcess = user?.permissions.canAdmin ? '' : (user?.proceso ?? '');
+  const hasGlobalProcessScope = Boolean(user?.permissions.canAdmin || user?.rol === 'OCI');
+  const scopedProcess = hasGlobalProcessScope ? '' : (getProcessNamesForAccess(user?.proceso ?? '')[0] ?? '');
   const effectiveProcessFilter = scopedProcess || filterProceso;
   const hasFilters = Boolean(filterOrigen || filterEstado || filterEficacia || (!scopedProcess && filterProceso));
 
@@ -204,7 +205,7 @@ export function DashboardPage() {
     : uniqueOptionSorted([
         ...(parametersQuery.data?.procesos ?? []),
         ...allActions.map((action) => action.proceso),
-        ...PROCESSES.map((process) => process.code),
+        ...PROCESSES.map((process) => process.name),
       ]);
 
   const kpiValues = {
@@ -307,9 +308,14 @@ export function DashboardPage() {
               onChange={e => setFilterProceso(e.target.value)}
             >
               {!scopedProcess ? <option value="">Todos los procesos</option> : null}
-              {processOptions.map(p => (
-                <option key={p} value={p}>{p} - {getProcessName(p)}</option>
-              ))}
+              {processOptions.map((p) => {
+                const processName = getProcessName(p);
+                return (
+                  <option key={p} value={p}>
+                    {p === processName ? p : `${p} - ${processName}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
