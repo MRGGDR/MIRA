@@ -2,6 +2,18 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.1.1] - 2026-07-05
+
+Actualizacion de catalogos operativos para dejar los accesos de evidencia alineados con las dependencias configuradas.
+
+### Procesos y evidencias
+
+- Se actualizo el catalogo de procesos con las dependencias y siglas oficiales entregadas.
+- Se agrego el mapa de enlaces de Drive por proceso para evidencias.
+- Se conecto el boton `Abrir Drive` del formulario de actividades con el proceso seleccionado.
+- Se mantuvo deshabilitado visualmente el boton cuando no exista enlace configurado.
+- Se conservaron equivalencias para codigos y nombres heredados de procesos.
+
 ## [1.1.0] - 2026-07-05
 
 Actualizacion del flujo de registro, seguimiento y administracion de usuarios para separar mejor las responsabilidades por rol y dejar la interfaz alineada con el formato MIRA.

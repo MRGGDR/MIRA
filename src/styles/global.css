@@ -2611,6 +2611,11 @@ a {
   padding: 8px 12px;
 }
 
+.evidence-url-field__button.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .evidence-url-field__instructions {
   color: var(--color-text-secondary);
   font-size: 0.86rem;

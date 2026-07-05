@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useFieldArray, useForm, useWatch, type FieldErrors, type FieldPath, type SubmitHandler, type UseFormRegister } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { FeedbackMessage } from '@/components/feedback/FeedbackMessage';
-import { getProcessNamesForAccess, isLegacyProcessCode, PROCESS_LEADERS, PROCESSES } from '@/config/processes';
+import { getDriveLinkForProcess, getProcessNamesForAccess, PROCESS_LEADERS, PROCESSES } from '@/config/processes';
 import { actionSchema, type ActionFormValues } from '@/features/actions/schemas/actionSchema';
 import type { CurrentUser, Parameters } from '@/features/actions/types';
 import { todayIso } from '@/utils/date';
@@ -69,16 +69,12 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   const scopedProcesses = hasGlobalProcessScope ? [] : getProcessNamesForAccess(currentUser?.proceso ?? '');
   const originOptions = uniqueOptionSorted(parameters?.origenes ?? []);
   const selectedType = useWatch({ control, name: 'tipoAccion' }) ?? '';
+  const selectedProcess = useWatch({ control, name: 'proceso' }) ?? initialValues.proceso ?? currentUser?.proceso ?? '';
   const normalizedType = selectedType.toLowerCase();
   const isImprovement = normalizedType.includes('mejora');
   const typeOptions = (parameters?.tiposAccion ?? []).filter((option) => !option.toLowerCase().includes('preventiva'));
-  const processOptions = scopedProcesses.length
-    ? scopedProcesses
-    : uniqueOptionSorted(
-        [...(parameters?.procesos ?? []), ...PROCESSES.map((item) => item.name)].filter(
-          (option) => !isLegacyProcessCode(option) && optionIdentity(option) !== 'otro proceso',
-        ),
-      );
+  const processOptions = scopedProcesses.length ? scopedProcesses : PROCESSES.map((item) => item.name);
+  const driveUrl = getDriveLinkForProcess(selectedProcess);
   const peopleOptions = parameters?.personas ?? [];
   const leaderOptions = uniqueOptionSorted(
     [...(parameters?.lideresProceso ?? []), ...PROCESS_LEADERS].filter((option) => optionIdentity(option) !== 'lider del proceso'),
@@ -326,7 +322,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   />
                   {showExecutionFields ? (
                     <>
-                      <EvidenceUrlField index={index} register={register} disabled={!canEditPlanExecution} />
+                      <EvidenceUrlField driveUrl={driveUrl} index={index} register={register} disabled={!canEditPlanExecution} />
                       <NestedInput
                         label="Fecha ejecucion"
                         name={`planMejoramiento.${index}.revisionFecha`}
@@ -666,10 +662,12 @@ function NestedInput({
 }
 
 function EvidenceUrlField({
+  driveUrl,
   index,
   register,
   disabled,
 }: {
+  driveUrl: string;
   index: number;
   register: UseFormRegister<ActionFormValues>;
   disabled?: boolean;
@@ -680,10 +678,16 @@ function EvidenceUrlField({
     <div className="form-field form-field--full evidence-url-field">
       <div className="evidence-url-field__head">
         <label htmlFor={id}>URL de evidencia</label>
-        <button className="button button--secondary evidence-url-field__button" type="button" disabled>
+        <a
+          className={`button button--secondary evidence-url-field__button ${driveUrl ? '' : 'is-disabled'}`}
+          aria-disabled={!driveUrl}
+          href={driveUrl || undefined}
+          rel="noreferrer"
+          target="_blank"
+        >
           <ExternalLink aria-hidden size={16} />
           Abrir Drive
-        </button>
+        </a>
       </div>
       <p className="evidence-url-field__instructions">
         Abre el Drive, crea una carpeta con el numero de la accion, por ejemplo Acc_400. Dentro de esa carpeta crea una
