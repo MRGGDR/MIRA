@@ -36,4 +36,13 @@ describe('apiClient', () => {
 
     await expect(apiClient.getStats()).rejects.toBeInstanceOf(ApiClientError);
   });
+
+  it('does not crash on import when Apps Script URL is invalid', async () => {
+    vi.stubEnv('VITE_APPS_SCRIPT_URL', 'valor-invalido');
+    vi.stubEnv('VITE_USE_DEV_PROXY', 'false');
+    vi.stubEnv('VITE_USE_MOCKS', 'false');
+    const { apiClient } = await import('@/services/apiClient');
+
+    await expect(apiClient.getStats()).rejects.toMatchObject({ code: 'API_URL_MISSING' });
+  });
 });

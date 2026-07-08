@@ -1,7 +1,17 @@
 import { z } from 'zod';
 
+function normalizeOptionalUrl(value: string | undefined): string {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return '';
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+    return '';
+  }
+}
+
 const envSchema = z.object({
-  VITE_APPS_SCRIPT_URL: z.string().url().optional().or(z.literal('')),
+  VITE_APPS_SCRIPT_URL: z.string().optional().transform(normalizeOptionalUrl),
   VITE_USE_MOCKS: z
     .string()
     .optional()
