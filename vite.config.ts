@@ -4,9 +4,9 @@ import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const appsScriptUrl = env.VITE_APPS_SCRIPT_URL;
+  const appsScriptUrl = env.VITE_APPS_SCRIPT_URL?.trim() ?? '';
   const useDevProxy = env.VITE_USE_DEV_PROXY === 'true';
-  const proxyUrl = appsScriptUrl ? new URL(appsScriptUrl) : null;
+  const proxyUrl = useDevProxy && appsScriptUrl ? new URL(appsScriptUrl) : null;
 
   const server = {
     host: '127.0.0.1',
