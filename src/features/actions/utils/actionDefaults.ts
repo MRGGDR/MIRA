@@ -2,9 +2,10 @@ import type { ActionFormValues } from '@/features/actions/schemas/actionSchema';
 import type { CorrectiveAction } from '@/features/actions/types';
 import { todayIso } from '@/utils/date';
 
-export function getDefaultActionValues(proceso = ''): ActionFormValues {
+export function getDefaultActionValues(proceso = '', id?: number): ActionFormValues {
   const today = todayIso();
   return {
+    id,
     fechaElaboracion: today,
     origen: '',
     tipoAccion: '',
@@ -21,8 +22,8 @@ export function getDefaultActionValues(proceso = ''): ActionFormValues {
     accion: '',
     planMejoramiento: [
       {
-        idActividad: '',
-        idAccion: undefined,
+        idActividad: id ? `${id}-001` : '',
+        idAccion: id,
         numeroActividad: 1,
         actividad: '',
         fechaApertura: today,

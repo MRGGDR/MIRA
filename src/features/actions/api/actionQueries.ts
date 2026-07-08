@@ -10,6 +10,10 @@ export const actionQueries = {
     queryKey: ['parameters'],
     queryFn: apiClient.getParameters,
   }),
+  nextActionId: () => ({
+    queryKey: ['actions', 'next-id'],
+    queryFn: apiClient.getNextActionId,
+  }),
   stats: () => ({
     queryKey: ['stats'],
     queryFn: apiClient.getStats,

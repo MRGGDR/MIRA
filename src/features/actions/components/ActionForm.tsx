@@ -32,6 +32,7 @@ interface FieldConfig {
   full?: boolean;
   required?: boolean;
   hidden?: boolean;
+  readOnly?: boolean;
 }
 
 export function ActionForm({ mode, initialValues, parameters, currentUser, isSaving, onSubmit }: ActionFormProps) {
@@ -70,6 +71,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   const scopedProcesses = hasGlobalProcessScope ? [] : getProcessNamesForAccess(currentUser?.proceso ?? '');
   const originOptions = uniqueOptionSorted(parameters?.origenes ?? []);
   const selectedType = useWatch({ control, name: 'tipoAccion' }) ?? '';
+  const selectedActionId = useWatch({ control, name: 'id' }) ?? initialValues.id;
   const selectedProcess = useWatch({ control, name: 'proceso' }) ?? initialValues.proceso ?? currentUser?.proceso ?? '';
   const normalizedType = selectedType.toLowerCase();
   const isImprovement = normalizedType.includes('mejora');
@@ -172,7 +174,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
       title: 'A. Descripción del hallazgo',
       phase: 'registro',
       fields: [
-        { name: 'id', label: 'Número de la acción', type: 'number' },
+        { name: 'id', label: 'Número de la acción', type: 'number', readOnly: mode === 'create' },
         { name: 'fechaElaboracion', label: 'Fecha de elaboración', type: 'date', required: true },
         { name: 'origen', label: 'Origen', type: 'select', options: originOptions, required: true },
         { name: 'tipoAccion', label: 'Tipo de acción', type: 'select', options: typeOptions, required: true },
@@ -279,6 +281,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   error={errors[field.name]?.message}
                   register={register}
                   disabled={access !== 'editable' || (field.name === 'proceso' && scopedProcesses.length === 1)}
+                  readOnly={field.readOnly}
                 />
               );
             })}
@@ -298,24 +301,27 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         <DynamicSectionHeader
           description="Agrega la cantidad de actividades que necesites."
           onAdd={() =>
-            planFieldArray.append({
-              idActividad: '',
-              idAccion: initialValues.id,
-              numeroActividad: planFieldArray.fields.length + 1,
-              actividad: '',
-              fechaApertura: todayIso(),
-              fechaCierre: '',
-              presupuesto: 0,
-              responsable: '',
-              revisionResponsable: '',
-              revisionFecha: '',
-              revisionObservacion: '',
-              observacionRevision: '',
-              validacionResponsable: selectedProcessLeader,
-              validacionFecha: '',
-              validacionObservacion: '',
-              evidencia: '',
-            })
+            (() => {
+              const number = planFieldArray.fields.length + 1;
+              return planFieldArray.append({
+                idActividad: buildActivityCode(selectedActionId, number),
+                idAccion: selectedActionId,
+                numeroActividad: number,
+                actividad: '',
+                fechaApertura: todayIso(),
+                fechaCierre: '',
+                presupuesto: 0,
+                responsable: '',
+                revisionResponsable: '',
+                revisionFecha: '',
+                revisionObservacion: '',
+                observacionRevision: '',
+                validacionResponsable: selectedProcessLeader,
+                validacionFecha: '',
+                validacionObservacion: '',
+                evidencia: '',
+              });
+            })()
           }
           disabled={!canAddOrRemoveActivities}
         />
@@ -331,8 +337,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   </button>
                 </div>
                 <div className="form-grid">
-                  <NestedInput label="Código" name={`planMejoramiento.${index}.idActividad`} register={register} disabled type="text" />
-                  <NestedInput label="Número" name={`planMejoramiento.${index}.numeroActividad`} register={register} disabled type="number" valueAsNumber />
+                  <ActivityCodeField actionId={selectedActionId} index={index} />
                   <NestedTextArea label="Actividad" name={`planMejoramiento.${index}.actividad`} register={register} disabled={!canEditActivityDefinition} full />
                   <NestedInput label="Fecha inicio actividad" name={`planMejoramiento.${index}.fechaApertura`} register={register} disabled={!canEditActivityDefinition} type="date" />
                   <NestedInput label="Fecha fin actividad" name={`planMejoramiento.${index}.fechaCierre`} register={register} disabled={!canEditActivityDefinition} type="date" />
@@ -427,7 +432,6 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     </form>
   );
 }
-
 function SaveConfirmationModal({
   isSaving,
   role,
@@ -548,9 +552,16 @@ function getAccessMeta(access: PhaseAccess): { label: string; hint: string; Icon
   return { label: 'Bloqueada', hint: 'Se habilita en otra fase', Icon: Lock };
 }
 
+function buildActivityCode(actionId: number | undefined, activityNumber: number): string {
+  return actionId ? `${actionId}-${String(activityNumber).padStart(3, '0')}` : `---${String(activityNumber).padStart(3, '0')}`;
+}
+
 function syncLegacyPlanFields(values: ActionFormValues): ActionFormValues {
-  const activities = values.planMejoramiento.map((activity) => ({
+  const activities = values.planMejoramiento.map((activity, index) => ({
     ...activity,
+    idActividad: buildActivityCode(values.id, index + 1),
+    idAccion: values.id,
+    numeroActividad: index + 1,
     revisionResponsable: activity.responsable,
     validacionResponsable: values.liderProceso || activity.validacionResponsable,
     evidencia: activity.evidencia ?? '',
@@ -701,6 +712,16 @@ function NestedInput({
   );
 }
 
+function ActivityCodeField({ actionId, index }: { actionId: number | undefined; index: number }) {
+  const code = buildActivityCode(actionId, index + 1);
+  return (
+    <div className="form-field">
+      <label>Código de actividad</label>
+      <input readOnly type="text" value={code} />
+    </div>
+  );
+}
+
 function EvidenceUrlField({
   driveUrl,
   index,
@@ -783,9 +804,10 @@ interface FormFieldProps {
   error?: string;
   register: UseFormRegister<ActionFormValues>;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
-function FormField({ field, mode, error, register, disabled: phaseDisabled }: FormFieldProps) {
+function FormField({ field, mode, error, register, disabled: phaseDisabled, readOnly }: FormFieldProps) {
   const id = `field-${field.name}`;
   const listId = `${id}-options`;
   const common = register(
@@ -827,6 +849,7 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled }: Fo
           id={id}
           type={field.type}
           disabled={disabled}
+          readOnly={readOnly}
           min={field.name === 'presupuesto' ? 0 : undefined}
           step={field.name === 'presupuesto' ? 1 : undefined}
           {...common}

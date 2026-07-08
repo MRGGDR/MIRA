@@ -186,6 +186,7 @@ export const apiClient = {
   createUser: (data: CreateUserInput) => request<ManagedUser>({ action: 'createUser', data }),
   updateUser: (data: UpdateUserInput) => request<ManagedUser>({ action: 'updateUser', data }),
   getParameters: () => request<Parameters>({ action: 'getParameters' }, true),
+  getNextActionId,
   listActions: (filters: ActionFilters) => request<ActionListResponse>({ action: 'listActions', params: { filters } }, true),
   listAllActions,
   getAction: (id: number) => request<CorrectiveAction>({ action: 'getAction', params: { id } }, true),
@@ -195,6 +196,18 @@ export const apiClient = {
   getStats: () => request<DashboardStats>({ action: 'getStats' }, true),
   getAudit: (actionId?: number) => request<AuditRecord[]>({ action: 'getAudit', params: { actionId } }, true),
 };
+
+async function getNextActionId(): Promise<number> {
+  try {
+    return await request<number>({ action: 'getNextActionId' }, true);
+  } catch (error) {
+    if (error instanceof ApiClientError && error.code === 'UNKNOWN_ACTION') {
+      const actions = await listAllActions();
+      return Math.max(NEXT_ACTION_ID_BASE, ...actions.map((action) => Number(action.id) || 0)) + 1;
+    }
+    throw error;
+  }
+}
 
 const mockParameters: Parameters = {
   origenes: ['Auditoria externa', 'Auditoria interna', 'Entes de control', 'Indicadores', 'PQRS', 'Otro'],
@@ -352,6 +365,8 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
       return mockParameters as TData;
     case 'getStats':
       return buildMockStats() as TData;
+    case 'getNextActionId':
+      return (Math.max(NEXT_ACTION_ID_BASE, ...mockActions.map((action) => action.id)) + 1) as TData;
     case 'listActions': {
       const filters = readFilters(payload.params);
       const items = filterActions(mockActions, filters);
