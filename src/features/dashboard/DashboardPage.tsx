@@ -83,7 +83,7 @@ const KPI_CONFIG = [
   },
 ] as const;
 
-/* ─── Tooltip personalizado ─────────────────────────────────────────────── */
+/* - Tooltip personalizado - */
 function ChartTooltip({
   active,
   payload,
@@ -106,7 +106,7 @@ function ChartTooltip({
   );
 }
 
-/* ─── Leyenda personalizada del donut ───────────────────────────────────── */
+/* - Leyenda personalizada del donut - */
 function DonutLegend({ items }: { items: Array<{ label: string; value: number; color: string }> }) {
   const total = items.reduce((s, i) => s + i.value, 0) || 1;
   return (
@@ -259,7 +259,7 @@ export function DashboardPage() {
     <div className="stack">
       <PageHeader
         title="MIRA"
-        description="Seguimiento institucional de acciones correctivas, preventivas y de mejora — UNGRD."
+        description="Seguimiento institucional de acciones correctivas, preventivas y de mejora - UNGRD."
         actions={
           <>
             <Link className="button button--primary" to="/acciones/nueva">
@@ -274,7 +274,7 @@ export function DashboardPage() {
         }
       />
 
-      {/* ── Filtros del Dashboard ───────────────────────────────────────── */}
+      {/* - Filtros del Dashboard - */}
       <AccessContextBanner user={user} surface="dashboard" />
 
       <div className="dash-filters">
@@ -370,7 +370,7 @@ export function DashboardPage() {
       </div>
 
 
-      {/* ── 4 KPI Cards ─────────────────────────────────────────────────── */}
+      {/* - 4 KPI Cards - */}
       <section aria-label="Indicadores clave" className="kpi-grid">
         {KPI_CONFIG.map(({ key, label, sublabel, icon: Icon, gradient, accent, shadow }) => {
           const value = kpiValues[key];
@@ -413,7 +413,7 @@ export function DashboardPage() {
         })}
       </section>
 
-      {/* ── Summary Strip ───────────────────────────────────────────────── */}
+      {/* - Summary Strip - */}
       <div className="summary-strip" aria-label="Resumen analítico">
         <div className="summary-item">
           <TrendingUp aria-hidden size={16} />
@@ -493,7 +493,7 @@ export function DashboardPage() {
         </article>
       </section>
 
-      {/* ── Charts Row ──────────────────────────────────────────────────── */}
+      {/* - Charts Row - */}
       <div className="charts-grid">
 
         {/* Donut: Estado */}
@@ -612,7 +612,7 @@ export function DashboardPage() {
 
       </div>
 
-      {/* ── Bar Chart: Acciones por proceso ─────────────────────────────── */}
+      {/* - Bar Chart: Acciones por proceso - */}
       {processChartData.length > 0 && (
         <section className="chart-card chart-card--wide">
           <div className="chart-card__head">
@@ -664,7 +664,7 @@ export function DashboardPage() {
         </section>
       )}
 
-      {/* ── Recent Actions Feed ──────────────────────────────────────────── */}
+      {/* - Recent Actions Feed - */}
       <section className="card card__body">
         <div className="actions-row" style={{ justifyContent: 'space-between', marginBottom: 18 }}>
           <div>

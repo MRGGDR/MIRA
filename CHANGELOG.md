@@ -2,6 +2,51 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.2.0] - 2026-07-08
+
+Actualización del flujo de actividades, revisión, validación y evaluación OCI para reforzar permisos, mejorar reportes y corregir la experiencia responsive.
+
+### Flujo y permisos
+
+- Se bloqueó la evaluación OCI hasta que todas las actividades tengan ejecución REV y validación VAL completas.
+- Se impidió notificar o mover acciones a revisión OCI cuando falte diligenciamiento REV/VAL.
+- Se permitió que el CREADOR mantenga actividades en acciones abiertas: editar, agregar o quitar actividades.
+- Se restringió la creación, edición y eliminación de actividades al rol `CREADOR` y administradores.
+- Se mantuvieron los campos propios de `REV`, `VAL` y `OCI` protegidos por etapa y permisos.
+- Se propagó el `Líder del proceso` como responsable de validación y se bloqueó su edición para VAL.
+- Se ajustó el formulario de OCI para mostrar primero actividades, luego evaluación de la acción y al final la descripción del hallazgo.
+
+### Actividades y datos
+
+- Se agregó el campo `Observación REV` por actividad.
+- Se dejó `Descripción de la ejecución` como campo manual, sin autollenarlo desde acción de contención.
+- Se enumeraron actividades en pantalla como `1`, `2`, `3` y se expusieron códigos técnicos como `415-001`, `415-002`.
+- Se ajustó el resumen del detalle para mostrar códigos reales de actividad.
+- Se configuró el consecutivo de acciones con base mínima `411`, usando siempre el máximo existente más uno para permitir reutilizar el siguiente número si se elimina.
+
+### Formularios
+
+- Se cambió `Registrado por` y `Líder del proceso` a campos de texto libre.
+- Se eliminó la lista fija de líderes de proceso en el formulario.
+- Se movió `Evaluador` al bloque inicial del reporte para acciones correctivas.
+- Se limitó el evaluador de acciones correctivas a `OCI` o `Líder del proceso`.
+- Se corrigieron etiquetas, mensajes y textos visibles con tildes.
+
+### Reportes y responsive
+
+- Se rediseñó el plan de actividades en el detalle para evitar texto vertical o columnas estrechas.
+- Se reemplazó la URL de evidencia por el botón `Abrir evidencia`.
+- Se dejó la observación de ejecución, REV y VAL en filas horizontales con todo el ancho disponible.
+- Se reorganizó la sección de revisión, validación y evaluación para que cada registro ocupe una fila completa.
+- Se ajustaron tablas, tarjetas y textos largos con saltos y ancho mínimo para evitar solapamientos en pantallas pequeñas.
+
+### Backend y autenticación
+
+- Se agregó caché de usuarios en Apps Script para reducir lecturas repetidas de la hoja `Usuarios` durante login y validación de sesión.
+- Se invalidó la caché al crear, actualizar usuarios o migrar hashes de contraseña.
+- Se mantuvo el almacenamiento de contraseñas mediante salt y hash; no se guardan contraseñas en archivos del frontend.
+- Se mejoró el manejo de errores HTTP de Apps Script en el cliente.
+
 ## [1.1.1] - 2026-07-05
 
 Actualizacion de catalogos operativos para dejar los accesos de evidencia alineados con las dependencias configuradas.

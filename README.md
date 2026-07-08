@@ -1,18 +1,18 @@
 # MIRA
 
-MIRA es una aplicacion web institucional para gestionar acciones correctivas y de mejora de la UNGRD. El frontend integra autenticacion, control de acceso por roles, flujo documental por etapas, filtros por proceso, dashboard operativo, bandejas de pendientes e historial. La app consume un backend externo configurado mediante variables de entorno.
+MIRA es una aplicación web institucional para gestionar acciones correctivas y de mejora de la UNGRD. El frontend integra autenticación, control de acceso por roles, flujo documental por etapas, filtros por proceso, dashboard operativo, bandejas de pendientes e historial. La app consume un backend externo configurado mediante variables de entorno.
 
 ## Funcionalidades principales
 
-- Inicio de sesion institucional con usuarios almacenados en Google Sheets.
+- Inicio de sesión institucional con usuarios almacenados en Google Sheets.
 - Roles `ADMIN`, `CREADOR`, `REV`, `VAL`, `OCI` y `CONSULTA`.
 - Filtro automatico por proceso para usuarios no administradores.
 - Dashboard con indicadores, semaforo, pendientes por rol y graficas interactivas.
-- Modulo Reportar con consulta, filtros desplegables, tabla, paginacion y acciones por registro.
+- Módulo Reportar con consulta, filtros desplegables, tabla, paginación y acciones por registro.
 - Formulario por acordeones con secciones editables, solo lectura o bloqueadas segun rol y etapa.
-- Maquina de estados para registro, analisis, plan de accion, validacion, revision OCI y cierre.
+- Máquina de estados para registro, análisis, plan de acción, validación, revisión OCI y cierre.
 - Notificacion manual a Control Interno.
-- Evaluacion de eficacia por OCI.
+- Evaluación de eficacia por OCI.
 - Historial de cambios.
 - Skeleton loaders y loader institucional con identidad MIRA.
 
@@ -111,4 +111,4 @@ El `.gitignore` excluye:
 
 ## Licencia y uso
 
-Proyecto institucional para la gestion interna de acciones correctivas y de mejora. Revise las politicas internas antes de publicar datos, registros o anexos.
+Proyecto institucional para la gestión interna de acciones correctivas y de mejora. Revise las políticas internas antes de publicar datos, registros o anexos.

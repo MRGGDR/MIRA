@@ -38,7 +38,7 @@ export function uniqueOptionSorted(values: string[]): string[] {
 
 function optionQuality(value: string): number {
   let score = 0;
-  if (!/[ÃÂ�]/.test(value)) score += 4;
+  if (!/[\u00c3\u00c2\ufffd]/.test(value)) score += 4;
   if (/[áéíóúÁÉÍÓÚñÑ]/.test(value)) score += 2;
   if (/^[\w\sÁÉÍÓÚáéíóúÑñ.,/-]+$/.test(value)) score += 1;
   return score;

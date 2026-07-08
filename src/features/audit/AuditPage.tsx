@@ -21,8 +21,8 @@ export function AuditPage() {
               <tr>
                 <th>Fecha</th>
                 <th>Usuario</th>
-                <th>Operacion</th>
-                <th>Numero</th>
+                <th>Operación</th>
+                <th>Número</th>
                 <th>Datos modificados</th>
               </tr>
             </thead>

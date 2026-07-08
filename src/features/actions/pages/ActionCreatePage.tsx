@@ -28,7 +28,7 @@ export function ActionCreatePage() {
 
   async function submit(values: ActionFormValues) {
     setSaveError(null);
-    show('Guardando accion...');
+    show('Guardando acción...');
     try {
       const action = await createAction.mutateAsync(values);
       await queryClient.invalidateQueries({ queryKey: ['actions', action.id] });
@@ -36,8 +36,8 @@ export function ActionCreatePage() {
         state: {
           feedback: {
             type: 'success',
-            title: 'Accion guardada',
-            message: `La accion ${action.id} se guardo correctamente.`,
+            title: 'Acción guardada',
+            message: `La acción ${action.id} se guardó correctamente.`,
           },
         },
       });
@@ -48,18 +48,18 @@ export function ActionCreatePage() {
     }
   }
 
-  if (parametersQuery.isLoading) return <LoadingState label="Cargando parametros..." />;
+  if (parametersQuery.isLoading) return <LoadingState label="Cargando parámetros..." />;
   if (!canCreateReport) return <Navigate to="/acciones" replace />;
 
   return (
     <div className="stack">
-      <PageHeader title="Reportar accion" description="Registro unico para todos los procesos." />
+      <PageHeader title="Reportar acción" description="Registro único para todos los procesos." />
       {parametersQuery.isError ? <ErrorMessage error={parametersQuery.error} /> : null}
       {saveError ? (
         <FeedbackMessage
           type="error"
-          title="No se pudo guardar la accion"
-          message={saveError instanceof Error ? saveError.message : 'Ocurrio un error inesperado al guardar.'}
+          title="No se pudo guardar la acción"
+          message={saveError instanceof Error ? saveError.message : 'Ocurrió un error inesperado al guardar.'}
         />
       ) : null}
       <ActionForm

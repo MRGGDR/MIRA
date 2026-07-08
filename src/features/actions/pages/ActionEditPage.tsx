@@ -35,7 +35,7 @@ export function ActionEditPage() {
           feedback: {
             type: 'success',
             title: 'Cambios guardados',
-            message: `La accion ${updated.id} se actualizo correctamente.`,
+            message: `La acción ${updated.id} se actualizó correctamente.`,
           },
         },
       });
@@ -46,22 +46,29 @@ export function ActionEditPage() {
     }
   }
 
-  if (actionQuery.isLoading || parametersQuery.isLoading) return <LoadingState label="Cargando accion..." />;
+  if (actionQuery.isLoading || parametersQuery.isLoading) return <LoadingState label="Cargando acción..." />;
   if (actionQuery.isError) return <ErrorMessage error={actionQuery.error} />;
-  if (!actionQuery.data) return <ErrorMessage error={new Error('Accion no encontrada.')} />;
-  if (!user?.permissions.canAdmin && !isActionPendingForRole(actionQuery.data, user?.rol)) {
+  if (!actionQuery.data) return <ErrorMessage error={new Error('Acción no encontrada.')} />;
+  const canRevMaintainActivities =
+    user?.rol === 'REV' && Boolean(user.permissions.canEditPlan) && actionQuery.data.estadoActual !== 'CERRADA';
+  const canMaintainOpenAction =
+    user?.rol === 'CREADOR' &&
+    Boolean(user.permissions.canUpdate) &&
+    actionQuery.data.estado !== 'CERRADA' &&
+    actionQuery.data.estadoActual !== 'CERRADA';
+  if (!user?.permissions.canAdmin && !isActionPendingForRole(actionQuery.data, user?.rol) && !canRevMaintainActivities && !canMaintainOpenAction) {
     return <Navigate to={`/acciones/${id}`} replace />;
   }
 
   return (
     <div className="stack">
-      <PageHeader title={`Editar accion ${id}`} description="La actualizacion se aplica solo al ID exacto." />
+      <PageHeader title={`Editar acción ${id}`} description="La actualización se aplica solo al ID exacto." />
       {parametersQuery.isError ? <ErrorMessage error={parametersQuery.error} /> : null}
       {saveError ? (
         <FeedbackMessage
           type="error"
           title="No se pudieron guardar los cambios"
-          message={saveError instanceof Error ? saveError.message : 'Ocurrio un error inesperado al guardar.'}
+          message={saveError instanceof Error ? saveError.message : 'Ocurrió un error inesperado al guardar.'}
         />
       ) : null}
       <ActionForm

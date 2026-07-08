@@ -43,6 +43,7 @@ interface RequestPayload {
 const DEFAULT_TIMEOUT_MS = 30000;
 const LOGIN_TIMEOUT_MS = 90000;
 const AUTH_TOKEN_KEY = 'neogestion.authToken';
+const NEXT_ACTION_ID_BASE = 411;
 
 export function getStoredAuthToken(): string {
   return window.localStorage.getItem(AUTH_TOKEN_KEY) ?? '';
@@ -87,15 +88,28 @@ async function request<TData>(payload: RequestPayload, safeToRetry = false, time
         signal: controller.signal,
       });
 
+      const rawResponse = await response.text();
+
       if (response.status === 401 || response.status === 403) {
         throw new ApiClientError(
-          'Apps Script rechazo la solicitud. Revise que el despliegue web permita acceso desde la aplicacion o use VITE_USE_MOCKS=true para desarrollo visual.',
+          'Apps Script rechazó la solicitud. Revise que el despliegue web permita acceso desde la aplicación o use VITE_USE_MOCKS=true para desarrollo visual.',
           'APPS_SCRIPT_UNAUTHORIZED',
           { status: response.status },
         );
       }
 
-      const rawResponse = await response.text();
+      if (response.ok === false) {
+        throw new ApiClientError(
+          `Apps Script devolvió HTTP ${response.status} al ejecutar ${payload.action}.`,
+          'APPS_SCRIPT_HTTP_ERROR',
+          {
+            action: payload.action,
+            status: response.status,
+            bodyPreview: rawResponse.slice(0, 600),
+          },
+        );
+      }
+
       const json = parseApiResponse<TData>(rawResponse);
       if (!json.ok) {
         throw new ApiClientError(json.error.message, json.error.code, json.error.details);
@@ -117,7 +131,7 @@ async function request<TData>(payload: RequestPayload, safeToRetry = false, time
   if (lastError instanceof ApiClientError) throw lastError;
   if (lastError instanceof DOMException && lastError.name === 'AbortError') {
     throw new ApiClientError(
-      'La solicitud supero el tiempo de espera. Revisa la conexion e intenta de nuevo; si es el primer ingreso despues de publicar Apps Script, puede tardar un poco mas.',
+      'La solicitud superó el tiempo de espera. Revisa la conexión e intenta de nuevo; si es el primer ingreso después de publicar Apps Script, puede tardar un poco más.',
       'REQUEST_TIMEOUT',
     );
   }
@@ -153,12 +167,12 @@ function parseApiResponse<TData>(rawResponse: string): ApiResponse<TData> {
   } catch {
     if (rawResponse.toLowerCase().includes('sign in - google accounts')) {
       throw new ApiClientError(
-        'Apps Script esta solicitando inicio de sesion. Cambie el acceso del despliegue web o use una URL /exec accesible para la app.',
+        'Apps Script está solicitando inicio de sesión. Cambie el acceso del despliegue web o use una URL /exec accesible para la app.',
         'APPS_SCRIPT_REQUIRES_LOGIN',
       );
     }
     throw new ApiClientError(
-      'Apps Script no devolvio JSON. Revise el despliegue, permisos y URL /exec.',
+      'Apps Script no devolvió JSON. Revise el despliegue, permisos y URL /exec.',
       'INVALID_APPS_SCRIPT_RESPONSE',
     );
   }
@@ -184,7 +198,7 @@ export const apiClient = {
 
 const mockParameters: Parameters = {
   origenes: ['Auditoria externa', 'Auditoria interna', 'Entes de control', 'Indicadores', 'PQRS', 'Otro'],
-  tiposAccion: ['Accion correctiva', 'Accion preventiva', 'Accion de mejora'],
+  tiposAccion: ['Acción correctiva', 'Acción preventiva', 'Acción de mejora'],
   procesos: PROCESSES.map((process) => process.name),
   personas: ['Ana Rodriguez', 'Carlos Perez', 'Lorena Cardenas'],
   lideresProceso: PROCESS_LEADERS,
@@ -226,7 +240,7 @@ const mockActions: CorrectiveAction[] = [
     id: 1,
     fechaElaboracion: '2026-05-15',
     origen: 'Auditoria interna',
-    tipoAccion: 'Accion correctiva',
+    tipoAccion: 'Acción correctiva',
     proceso: 'Gestión Gerencial (Dirección General)',
     identificadoPor: 'Carlos Perez',
     liderProceso: 'Lorena Cardenas',
@@ -246,6 +260,9 @@ const mockActions: CorrectiveAction[] = [
     accion: 'Implementar seguimiento mensual',
     planMejoramiento: [
       {
+        idActividad: '1-001',
+        idAccion: 1,
+        numeroActividad: 1,
         actividad: 'Implementar seguimiento mensual',
         fechaApertura: '2026-05-15',
         fechaCierre: '',
@@ -254,6 +271,7 @@ const mockActions: CorrectiveAction[] = [
         revisionResponsable: 'Beatriz Parra',
         revisionFecha: '',
         revisionObservacion: '',
+        observacionRevision: '',
         validacionResponsable: 'Carlos Perez',
         validacionFecha: '',
         validacionObservacion: '',
@@ -319,7 +337,7 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
     case 'updateUser': {
       const data = payload.data as UpdateUserInput;
       const index = mockUsers.findIndex((user) => user.email.toLowerCase() === data.email.toLowerCase());
-      if (index < 0) throw new ApiClientError('No se encontro el usuario.', 'USER_NOT_FOUND');
+      if (index < 0) throw new ApiClientError('No se encontró el usuario.', 'USER_NOT_FOUND');
       const updated: ManagedUser = {
         email: mockUsers[index].email,
         nombre: data.nombre.trim(),
@@ -348,14 +366,14 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
     case 'getAction': {
       const id = Number(payload.params?.id);
       const action = mockActions.find((item) => item.id === id);
-      if (!action) throw new ApiClientError('No se encontro la accion solicitada.', 'ACTION_NOT_FOUND');
+      if (!action) throw new ApiClientError('No se encontró la acción solicitada.', 'ACTION_NOT_FOUND');
       return action as TData;
     }
     case 'createAction': {
       const data = payload.data as CreateActionInput;
-      const requestedId = data.id ?? Math.max(...mockActions.map((action) => action.id)) + 1;
+      const requestedId = data.id ?? Math.max(NEXT_ACTION_ID_BASE, ...mockActions.map((action) => action.id)) + 1;
       if (mockActions.some((action) => action.id === requestedId)) {
-        throw new ApiClientError('Ya existe una accion con ese numero.', 'DUPLICATE_ID', { id: requestedId });
+        throw new ApiClientError('Ya existe una acción con ese número.', 'DUPLICATE_ID', { id: requestedId });
       }
       const created: CorrectiveAction = {
         ...data,
@@ -373,12 +391,12 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
     case 'updateAction': {
       const data = payload.data as UpdateActionInput;
       const index = mockActions.findIndex((item) => item.id === data.id);
-      if (index < 0) throw new ApiClientError('No se encontro la accion solicitada.', 'ACTION_NOT_FOUND');
+      if (index < 0) throw new ApiClientError('No se encontró la acción solicitada.', 'ACTION_NOT_FOUND');
       const updated: CorrectiveAction = {
         ...data,
         estado: data.eficacia ? 'CERRADA' : 'ABIERTA',
         estadoActual: getUpdatedMockStage(data),
-        correoEnviado: Boolean(data.correoEnviado),
+        correoEnviado: areMockActivitiesReadyForOci(data) && Boolean(data.correoEnviado),
         fechasBloqueadas: Boolean(data.fechasBloqueadas),
         accionContencion: data.accionContencion ?? '',
         recomendacionesFinales: data.recomendacionesFinales ?? '',
@@ -389,14 +407,20 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
     case 'notifyOci': {
       const id = Number(payload.params?.id);
       const index = mockActions.findIndex((item) => item.id === id);
-      if (index < 0) throw new ApiClientError('No se encontro la accion solicitada.', 'ACTION_NOT_FOUND');
+      if (index < 0) throw new ApiClientError('No se encontró la acción solicitada.', 'ACTION_NOT_FOUND');
+      if (!areMockActivitiesReadyForOci(mockActions[index])) {
+        throw new ApiClientError(
+          'No puede notificar a Control Interno hasta completar revisión y validación de todas las actividades.',
+          'OCI_GATE_BLOCKED',
+        );
+      }
       mockActions[index] = { ...mockActions[index], correoEnviado: true, estadoActual: 'REVISION_OCI' };
       return mockActions[index] as TData;
     }
     case 'getAudit':
       return [] as TData;
     default:
-      throw new ApiClientError('Operacion no implementada en mock.', 'MOCK_NOT_IMPLEMENTED');
+      throw new ApiClientError('Operación no implementada en mock.', 'MOCK_NOT_IMPLEMENTED');
   }
 }
 
@@ -430,8 +454,9 @@ function getCreatedMockStage(data: CreateActionInput): CorrectiveAction['estadoA
 
 function getUpdatedMockStage(data: UpdateActionInput): CorrectiveAction['estadoActual'] {
   if (data.eficacia === 'SI') return 'CERRADA';
-  if (areMockActivitiesValidated(data)) return 'REVISION_OCI';
-  if (data.correoEnviado) return 'REVISION_OCI';
+  if (areMockActivitiesReadyForOci(data)) return 'REVISION_OCI';
+  if (data.estadoActual === 'REVISION_OCI' && areMockActivitiesExecuted(data)) return 'VALIDACION';
+  if (data.estadoActual === 'REVISION_OCI') return 'PLAN_ACCION';
   if (data.fechasBloqueadas || areMockActivitiesExecuted(data)) return 'VALIDACION';
   return data.estadoActual ?? 'REGISTRO';
 }
@@ -445,7 +470,10 @@ function hasMockPlanActivity(data: CreateActionInput) {
 
 function areMockActivitiesExecuted(data: CreateActionInput) {
   const activities = data.planMejoramiento ?? [];
-  return activities.length > 0 && activities.every((activity) => activity.revisionFecha && activity.revisionObservacion.trim());
+  return (
+    activities.length > 0 &&
+    activities.every((activity) => activity.revisionFecha && activity.revisionObservacion.trim() && activity.observacionRevision.trim())
+  );
 }
 
 function areMockActivitiesValidated(data: CreateActionInput) {
@@ -454,6 +482,10 @@ function areMockActivitiesValidated(data: CreateActionInput) {
     activities.length > 0 &&
     activities.every((activity) => activity.validacionResponsable.trim() && activity.validacionFecha && activity.validacionObservacion.trim())
   );
+}
+
+function areMockActivitiesReadyForOci(data: CreateActionInput) {
+  return areMockActivitiesExecuted(data) && areMockActivitiesValidated(data);
 }
 
 function buildMockStats(): DashboardStats {

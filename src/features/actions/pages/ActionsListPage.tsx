@@ -122,6 +122,8 @@ function canCreateReports(user: CurrentUser | null | undefined): boolean {
 function canManageAction(action: CorrectiveAction, user: CurrentUser | null | undefined): boolean {
   if (!user) return false;
   if (user.permissions.canAdmin) return true;
+  if (user.rol === 'CREADOR' && user.permissions.canUpdate && action.estado !== 'CERRADA' && action.estadoActual !== 'CERRADA') return true;
+  if (user.rol === 'REV' && user.permissions.canEditPlan && action.estadoActual !== 'CERRADA') return true;
   return isActionPendingForRole(action, user.rol);
 }
 
@@ -301,14 +303,14 @@ export function ActionsListPage() {
         <div className="report-section-head">
           <div>
             <h3 className="section-title">Consultar reportes</h3>
-            <p className="muted">Combina filtros para encontrar acciones por numero, proceso, responsable o estado.</p>
+            <p className="muted">Combina filtros para encontrar acciones por número, proceso, responsable o estado.</p>
           </div>
           <span className="report-filter-count">{activeFilters} filtro(s) activo(s)</span>
         </div>
 
         <div className="form-grid report-filter-grid">
           <div className="form-field">
-            <label htmlFor="filter-id">Numero exacto</label>
+            <label htmlFor="filter-id">Número exacto</label>
             <select id="filter-id" value={draftFilters.id ?? ''} onChange={(event) => updateFilter('id', event.target.value)}>
               <option value="">Todos</option>
               {filterOptions.ids.map((id) => (
@@ -432,10 +434,10 @@ export function ActionsListPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Numero</th>
+                  <th>Número</th>
                   <th>Elaboracion</th>
                   <th>Proceso</th>
-                  <th>Tipo de accion</th>
+                  <th>Tipo de acción</th>
                   <th>Reporte</th>
                   <th>Responsable</th>
                   <th>Fecha fin</th>
@@ -453,13 +455,13 @@ export function ActionsListPage() {
                         <strong>No hay reportes para estos filtros.</strong>
                         <span>
                           {canCreate
-                            ? 'Ajusta la busqueda o registra una nueva accion.'
-                            : 'Ajusta la busqueda o espera a que una accion llegue a tu etapa.'}
+                            ? 'Ajusta la búsqueda o registra una nueva acción.'
+                            : 'Ajusta la búsqueda o espera a que una acción llegue a tu etapa.'}
                         </span>
                         {canCreate ? (
                           <Link className="button button--primary" to="/acciones/nueva">
                             <FilePlus2 aria-hidden size={16} />
-                            Reportar accion
+                            Reportar acción
                           </Link>
                         ) : null}
                       </div>
@@ -492,11 +494,11 @@ export function ActionsListPage() {
                       </td>
                       <td>
                         <div className="actions-row report-table-actions">
-                          <Link className="button button--secondary" to={`/acciones/${action.id}`} aria-label={`Ver accion ${action.id}`}>
+                          <Link className="button button--secondary" to={`/acciones/${action.id}`} aria-label={`Ver acción ${action.id}`}>
                             <Eye aria-hidden size={16} />
                           </Link>
                           {canManageAction(action, user) ? (
-                            <Link className="button button--secondary" to={`/acciones/${action.id}/editar`} aria-label={`Gestionar accion ${action.id}`}>
+                            <Link className="button button--secondary" to={`/acciones/${action.id}/editar`} aria-label={`Gestionar acción ${action.id}`}>
                               <Pencil aria-hidden size={16} />
                             </Link>
                           ) : null}

@@ -19,6 +19,9 @@ export interface DefinitiveCause {
 }
 
 export interface ImprovementPlanActivity {
+  idActividad?: string;
+  idAccion?: number;
+  numeroActividad?: number;
   actividad: string;
   fechaApertura: string;
   fechaCierre: string;
@@ -27,6 +30,7 @@ export interface ImprovementPlanActivity {
   revisionResponsable: string;
   revisionFecha: string;
   revisionObservacion: string;
+  observacionRevision: string;
   validacionResponsable: string;
   validacionFecha: string;
   validacionObservacion: string;

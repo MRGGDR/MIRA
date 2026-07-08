@@ -21,6 +21,9 @@ export function getDefaultActionValues(proceso = ''): ActionFormValues {
     accion: '',
     planMejoramiento: [
       {
+        idActividad: '',
+        idAccion: undefined,
+        numeroActividad: 1,
         actividad: '',
         fechaApertura: today,
         fechaCierre: '',
@@ -29,6 +32,7 @@ export function getDefaultActionValues(proceso = ''): ActionFormValues {
         revisionResponsable: '',
         revisionFecha: '',
         revisionObservacion: '',
+        observacionRevision: '',
         validacionResponsable: '',
         validacionFecha: '',
         validacionObservacion: '',
@@ -68,7 +72,11 @@ export function actionToFormValues(action: CorrectiveAction): ActionFormValues {
     causasDefinitivas: action.causasDefinitivas ?? [],
     planMejoramiento: (action.planMejoramiento ?? []).map((activity) => ({
       ...activity,
+      idActividad: activity.idActividad ?? '',
+      idAccion: activity.idAccion,
+      numeroActividad: activity.numeroActividad,
       evidencia: activity.evidencia ?? '',
+      observacionRevision: activity.observacionRevision ?? '',
     })),
     presupuesto: Number(action.presupuesto || 0),
     correoEnviado: Boolean(action.correoEnviado),

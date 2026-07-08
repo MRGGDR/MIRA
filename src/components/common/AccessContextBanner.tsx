@@ -11,10 +11,10 @@ interface AccessContextBannerProps {
 const roleCapabilities: Record<string, string[]> = {
   ADMIN: ['Ve todos los procesos.', 'Puede crear, editar y revisar cualquier fase.', 'Puede apoyar o corregir registros de otras areas.'],
   CREADOR: ['Puede reportar hallazgos.', 'Edita registro, analisis de causas y actividades base.', 'Consulta solo registros de su proceso.'],
-  REV: ['Gestiona acciones que llegan a revision.', 'Diligencia ejecucion y evidencia de las actividades.', 'Puede notificar a Control Interno.'],
-  VAL: ['Gestiona acciones que llegan a validacion.', 'Diligencia validacion de las actividades.', 'Consulta solo registros de su proceso.'],
-  OCI: ['Gestiona acciones enviadas a OCI.', 'Evalua la eficacia de la accion.', 'Consulta solo registros de su proceso.'],
-  CONSULTA: ['Solo puede consultar informacion.', 'No puede crear ni editar reportes.', 'Consulta solo registros permitidos.'],
+  REV: ['Gestiona acciones que llegan a revisión.', 'Diligencia ejecución y evidencia de las actividades.', 'Puede notificar a Control Interno.'],
+  VAL: ['Gestiona acciones que llegan a validación.', 'Diligencia validación de las actividades.', 'Consulta solo registros de su proceso.'],
+  OCI: ['Gestiona acciones enviadas a OCI.', 'Evalúa la eficacia de la acción.', 'Consulta solo registros de su proceso.'],
+  CONSULTA: ['Solo puede consultar información.', 'No puede crear ni editar reportes.', 'Consulta solo registros permitidos.'],
 };
 
 export function AccessContextBanner({ user, surface }: AccessContextBannerProps) {
@@ -37,7 +37,7 @@ export function AccessContextBanner({ user, surface }: AccessContextBannerProps)
           <strong>
             {surfaceText}: rol {role} · {processLabel}
           </strong>
-          <small>{hasGlobalProcessScope ? 'Alcance global de procesos.' : 'Solo estas viendo informacion de tu proceso y permisos de rol.'}</small>
+          <small>{hasGlobalProcessScope ? 'Alcance global de procesos.' : 'Solo estás viendo información de tu proceso y permisos de rol.'}</small>
         </span>
         <span className="access-banner__action">
           <Info aria-hidden size={16} />
@@ -47,7 +47,7 @@ export function AccessContextBanner({ user, surface }: AccessContextBannerProps)
 
       {open ? (
         <div className="access-modal" role="dialog" aria-modal="true" aria-labelledby="access-modal-title">
-          <button className="access-modal__backdrop" type="button" aria-label="Cerrar informacion de permisos" onClick={() => setOpen(false)} />
+          <button className="access-modal__backdrop" type="button" aria-label="Cerrar información de permisos" onClick={() => setOpen(false)} />
           <section className="access-modal__card">
             <div className="access-modal__head">
               <div>
@@ -60,7 +60,7 @@ export function AccessContextBanner({ user, surface }: AccessContextBannerProps)
             </div>
 
             <div className="access-modal__summary">
-              <AccessFact label="Usuario" value={user?.nombre ?? 'Sesion activa'} />
+              <AccessFact label="Usuario" value={user?.nombre ?? 'Sesión activa'} />
               <AccessFact label="Rol" value={role} />
               <AccessFact label="Proceso" value={processLabel} />
               <AccessFact label="Alcance" value={hasGlobalProcessScope ? 'Todos los registros' : 'Solo registros del proceso asignado'} />

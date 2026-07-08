@@ -34,15 +34,15 @@ export function MainLayout() {
         <div className="sidebar__footer">
           <div className="sidebar__session">
             <span className="sidebar__user-card">
-              {user?.nombre ?? 'Sesion activa'} - {user?.rol}
+              {user?.nombre ?? 'Sesión activa'} - {user?.rol}
               {user?.rol === 'OCI' ? ' - Todos los procesos' : user?.proceso && !user.permissions.canAdmin ? ` - ${user.proceso}` : ''}
             </span>
             <button className="sidebar__logout" type="button" onClick={logout}>
-              Cerrar sesion
+              Cerrar sesión
             </button>
           </div>
           <div className="sidebar__office">
-            <span className="sidebar__footer-badge">Oficina Asesora de Planeacion e Informacion</span>
+            <span className="sidebar__footer-badge">Oficina Asesora de Planeación e Información</span>
           </div>
         </div>
       </aside>

@@ -21,6 +21,9 @@ const definitiveCauseSchema = z.object({
 });
 
 const planActivitySchema = z.object({
+  idActividad: optionalText.optional(),
+  idAccion: z.number().optional(),
+  numeroActividad: z.number().optional(),
   actividad: optionalText,
   fechaApertura: dateString,
   fechaCierre: dateString,
@@ -29,6 +32,7 @@ const planActivitySchema = z.object({
   revisionResponsable: optionalText,
   revisionFecha: dateString,
   revisionObservacion: optionalText,
+  observacionRevision: optionalText,
   validacionResponsable: optionalText,
   validacionFecha: dateString,
   validacionObservacion: optionalText,
@@ -37,10 +41,10 @@ const planActivitySchema = z.object({
 
 export const actionSchema = z
   .object({
-    id: z.number().int('El numero debe ser entero').positive('El numero debe ser positivo').optional(),
+    id: z.number().int('El número debe ser entero').positive('El número debe ser positivo').optional(),
     fechaElaboracion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha obligatoria'),
     origen: z.string().min(1, 'Seleccione el origen'),
-    tipoAccion: z.string().min(1, 'Seleccione el tipo de accion'),
+    tipoAccion: z.string().min(1, 'Seleccione el tipo de acción'),
     proceso: z.string().min(1, 'Seleccione el proceso'),
     identificadoPor: z.string().trim(),
     liderProceso: z.string().trim(),
@@ -106,11 +110,60 @@ export const actionSchema = z
       if (activity.revisionFecha && activity.validacionFecha && activity.validacionFecha < activity.revisionFecha) {
         ctx.addIssue({
           code: 'custom',
-          message: 'La validacion no puede ser anterior a la revision',
+          message: 'La validación no puede ser anterior a la revisión',
           path: ['planMejoramiento', index, 'validacionFecha'],
         });
       }
     });
+
+    const activeActivities = value.planMejoramiento
+      .map((activity, index) => ({ activity, index }))
+      .filter(({ activity }) =>
+        activity.actividad.trim() ||
+        activity.responsable.trim() ||
+        activity.fechaApertura ||
+        activity.fechaCierre ||
+        activity.evidencia.trim() ||
+        activity.revisionFecha ||
+        activity.revisionObservacion.trim() ||
+        activity.observacionRevision.trim() ||
+        activity.validacionFecha ||
+        activity.validacionObservacion.trim(),
+      );
+    const isOciEvaluation =
+      ['REVISION_OCI', 'CERRADA'].includes(value.estadoActual) ||
+      Boolean(value.eficacia || value.fechaEvaluacion || value.evaluacionObservacion.trim());
+
+    if (isOciEvaluation) {
+      if (!activeActivities.length) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Registre al menos una actividad antes de evaluar en OCI',
+          path: ['planMejoramiento'],
+        });
+      }
+      activeActivities.forEach(({ activity, index }) => {
+        const requiredFields: Array<[keyof typeof activity, string]> = [
+          ['revisionFecha', 'Registre la fecha de ejecución REV'],
+          ['revisionObservacion', 'Registre la descripción de ejecución'],
+          ['observacionRevision', 'Registre la observación REV'],
+          ['validacionResponsable', 'Registre el responsable de validación'],
+          ['validacionFecha', 'Registre la fecha de validación'],
+          ['validacionObservacion', 'Registre la observación de validación'],
+        ];
+        requiredFields.forEach(([field, message]) => {
+          const fieldValue = activity[field];
+          const textValue = typeof fieldValue === 'string' ? fieldValue.trim() : String(fieldValue ?? '').trim();
+          if (!textValue) {
+            ctx.addIssue({
+              code: 'custom',
+              message,
+              path: ['planMejoramiento', index, field],
+            });
+          }
+        });
+      });
+    }
 
     const requiresPlan = value.estadoActual === 'PLAN_ACCION' || value.fechasBloqueadas || ['VALIDACION', 'REVISION_OCI', 'CERRADA'].includes(value.estadoActual);
     if (requiresPlan) {
@@ -164,7 +217,7 @@ export const actionSchema = z
     if (value.eficacia === 'SI' && !value.fechaEvaluacion) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Registre la fecha de evaluacion',
+        message: 'Registre la fecha de evaluación',
         path: ['fechaEvaluacion'],
       });
     }
