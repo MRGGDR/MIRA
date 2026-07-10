@@ -63,13 +63,6 @@ export const WORKFLOW_STAGES: Record<DocumentState, WorkflowStageMeta> = {
   },
 };
 
-const ROLE_STATES: Partial<Record<UserRole, DocumentState[]>> = {
-  CREADOR: ['REGISTRO', 'ANALISIS'],
-  REV: ['PLAN_ACCION'],
-  VAL: ['VALIDACION'],
-  OCI: ['REVISION_OCI'],
-};
-
 export function getWorkflowStage(action: CorrectiveAction): WorkflowStageMeta {
   return WORKFLOW_STAGES[action.estadoActual] ?? WORKFLOW_STAGES.REGISTRO;
 }
@@ -77,7 +70,13 @@ export function getWorkflowStage(action: CorrectiveAction): WorkflowStageMeta {
 export function isActionPendingForRole(action: CorrectiveAction, role: UserRole | undefined): boolean {
   if (!role || role === 'CONSULTA' || role === 'ANONIMO') return false;
   if (role === 'ADMIN') return action.estadoActual !== 'CERRADA';
-  return Boolean(ROLE_STATES[role]?.includes(action.estadoActual));
+  if (role === 'CREADOR') return action.estadoActual === 'REGISTRO' || action.estadoActual === 'ANALISIS';
+  if (role === 'REV') return action.estadoActual === 'PLAN_ACCION';
+  if (role === 'VAL') {
+    return action.estadoActual === 'VALIDACION' || (action.estadoActual === 'REVISION_OCI' && !isOciEvaluator(action));
+  }
+  if (role === 'OCI') return action.estadoActual === 'REVISION_OCI' && isOciEvaluator(action);
+  return false;
 }
 
 export function countPendingForRole(actions: CorrectiveAction[], role: UserRole | undefined): number {
@@ -92,7 +91,7 @@ export function buildWorkflowRoleQueues(actions: CorrectiveAction[]) {
     { role: 'OCI' as const, label: 'OCI', states: ['REVISION_OCI'] as DocumentState[] },
   ].map((queue) => ({
     ...queue,
-    items: actions.filter((action) => queue.states.includes(action.estadoActual)),
+    items: actions.filter((action) => isActionPendingForRole(action, queue.role)),
   }));
 }
 
@@ -106,4 +105,8 @@ export function buildWorkflowTrafficLight(actions: CorrectiveAction[], role: Use
     yellow: pendingForRole,
     green: openOnTime,
   };
+}
+
+function isOciEvaluator(action: CorrectiveAction): boolean {
+  return action.auditorInterno.trim().toLowerCase() === 'oci';
 }

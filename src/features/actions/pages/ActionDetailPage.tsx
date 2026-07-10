@@ -54,7 +54,12 @@ export function ActionDetailPage() {
   const lastActivity = getLastActivity(action);
   const activityCodes = buildPlanActivities(action).map((activity, index) => getActivityCode(action.id, activity, index)).join(', ');
   const readyForOci = areActivitiesReadyForOci(action);
-  const canNotifyOci = Boolean((user?.permissions.canNotifyOci || user?.permissions.canAdmin) && !action.correoEnviado && readyForOci);
+  const canNotifyOci = Boolean(
+    action.auditorInterno.trim().toLowerCase() === 'oci' &&
+      (user?.permissions.canNotifyOci || user?.permissions.canAdmin) &&
+      !action.correoEnviado &&
+      readyForOci,
+  );
   const canEditAction = Boolean(
     user?.permissions.canAdmin ||
       isActionPendingForRole(action, user?.rol) ||
@@ -235,6 +240,7 @@ function PlanActivityReport({ actionId, activity, index }: { actionId: number; a
           chip={<span className="control-chip">Ejecución</span>}
           date={formatDate(activity.revisionFecha)}
           observation={activity.revisionObservacion}
+          secondaryObservation={activity.observacionRevision}
           responsible={activity.responsable}
         />
         <PlanControlRow
@@ -274,11 +280,13 @@ function PlanControlRow({
   responsible,
   date,
   observation,
+  secondaryObservation,
 }: {
   chip: ReactNode;
   responsible: string;
   date: string;
   observation: string;
+  secondaryObservation?: string;
 }) {
   return (
     <div className="plan-control-row">
@@ -294,8 +302,9 @@ function PlanControlRow({
         </div>
       </div>
       <div className="plan-control-row__observation">
-        <span>Observación</span>
+        <span>Detalle</span>
         <p>{observation || 'Sin registrar'}</p>
+        {secondaryObservation ? <p>Respuesta de contención REV: {secondaryObservation}</p> : null}
       </div>
     </div>
   );
@@ -378,6 +387,7 @@ function buildPlanActivities(action: CorrectiveAction): ImprovementPlanActivity[
         activity.actividad ||
         activity.responsable ||
         activity.revisionObservacion ||
+        activity.observacionRevision ||
         activity.validacionObservacion ||
         activity.evidencia ||
         activity.fechaApertura ||

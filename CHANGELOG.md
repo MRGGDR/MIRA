@@ -2,6 +2,32 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.2.2] - 2026-07-10
+
+Actualizacion del flujo por evaluador, validacion por actividad y rendimiento de carga contra Apps Script.
+
+### Flujo por roles
+
+- Se dejo la evaluacion final asignada al evaluador seleccionado: `OCI` para Control Interno o `Lider del proceso` para `VAL`.
+- Se evito que acciones con evaluador `Lider del proceso` aparezcan como pendientes de `OCI`.
+- Se permitio que `REV` siga completando actividades mientras la accion no este cerrada.
+- Se habilito que la accion pase a `VALIDACION` cuando exista al menos una actividad revisada, sin exigir que todas las actividades esten revisadas.
+
+### Actividades y validacion
+
+- Se cambio la validacion de actividad a un desplegable `Fue eficaz?` con opciones `SI` y `NO`.
+- Se bloqueo la validacion de actividades no revisadas por `REV`.
+- Se fijo la fecha de validacion al dia de registro por actividad evaluada.
+- Se agrego `Respuesta de contencion REV` como campo operativo de REV.
+- Se reforzo que no se guarden actividades diligenciadas sin fecha inicial y fecha final.
+
+### Carga e integracion
+
+- Se dejo el uso normal de la app con solo `VITE_APPS_SCRIPT_URL`, sin requerir mocks ni proxy local.
+- Se aumento la carga paginada del cliente a 1000 registros para reducir rondas contra Apps Script.
+- Se mejoro el mensaje de error HTTP de Apps Script mostrando el detalle devuelto por el backend cuando existe.
+- Se valido el flujo end-to-end contra Apps Script con las acciones de prueba `421`, `422` y `423`; todas quedaron cerradas.
+
 ## [1.2.1] - 2026-07-10
 
 Corrección del flujo de evaluadores y revisión para acciones correctivas y de mejora.

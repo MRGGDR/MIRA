@@ -114,6 +114,15 @@ export const actionSchema = z
           path: ['planMejoramiento', index, 'validacionFecha'],
         });
       }
+      const hasValidationData = activity.validacionFecha || activity.validacionObservacion.trim();
+      const isReviewed = activity.revisionFecha && activity.revisionObservacion.trim();
+      if (hasValidationData && !isReviewed) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Solo puede validar actividades revisadas por REV',
+          path: ['planMejoramiento', index, 'validacionObservacion'],
+        });
+      }
     });
 
     const activeActivities = value.planMejoramiento
@@ -151,15 +160,15 @@ export const actionSchema = z
       });
     }
 
-    const isOciEvaluation =
+    const isFinalEvaluation =
       ['REVISION_OCI', 'CERRADA'].includes(value.estadoActual) ||
       Boolean(value.eficacia || value.fechaEvaluacion || value.evaluacionObservacion.trim());
 
-    if (isOciEvaluation) {
+    if (isFinalEvaluation) {
       if (!activeActivities.length) {
         ctx.addIssue({
           code: 'custom',
-          message: 'Registre al menos una actividad antes de evaluar en OCI',
+          message: 'Registre al menos una actividad antes de evaluar la acción',
           path: ['planMejoramiento'],
         });
       }
@@ -169,7 +178,7 @@ export const actionSchema = z
           ['revisionObservacion', 'Registre la descripción de ejecución'],
           ['validacionResponsable', 'Registre el responsable de validación'],
           ['validacionFecha', 'Registre la fecha de validación'],
-          ['validacionObservacion', 'Registre la observación de validación'],
+          ['validacionObservacion', 'Seleccione si fue eficaz'],
         ];
         requiredFields.forEach(([field, message]) => {
           const fieldValue = activity[field];
@@ -208,33 +217,42 @@ export const actionSchema = z
         });
       }
 
-      value.planMejoramiento.forEach((activity, index) => {
-        const hasAnyActivityData = activity.actividad.trim() || activity.responsable.trim() || activity.fechaApertura || activity.fechaCierre;
-        if (hasAnyActivityData && !activity.actividad.trim()) {
-          ctx.addIssue({
-            code: 'custom',
-            message: 'Registre la actividad',
-            path: ['planMejoramiento', index, 'actividad'],
-          });
-        }
-        if (hasAnyActivityData && !activity.fechaApertura) {
-          ctx.addIssue({
-            code: 'custom',
-            message: 'Registre la fecha de inicio de actividad',
-            path: ['planMejoramiento', index, 'fechaApertura'],
-          });
-        }
-        if (hasAnyActivityData && !activity.fechaCierre) {
-          ctx.addIssue({
-            code: 'custom',
-            message: 'Registre la fecha fin de actividad',
-            path: ['planMejoramiento', index, 'fechaCierre'],
-          });
-        }
-      });
     }
 
-    if (value.eficacia === 'SI' && !value.fechaEvaluacion) {
+    value.planMejoramiento.forEach((activity, index) => {
+      const hasAnyActivityData =
+        activity.actividad.trim() ||
+        activity.responsable.trim() ||
+        activity.evidencia.trim() ||
+        activity.revisionFecha ||
+        activity.revisionObservacion.trim() ||
+        activity.observacionRevision.trim() ||
+        activity.validacionFecha ||
+        activity.validacionObservacion.trim();
+      if (hasAnyActivityData && !activity.actividad.trim()) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Registre la actividad',
+          path: ['planMejoramiento', index, 'actividad'],
+        });
+      }
+      if (hasAnyActivityData && !activity.fechaApertura) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Registre la fecha de inicio de actividad',
+          path: ['planMejoramiento', index, 'fechaApertura'],
+        });
+      }
+      if (hasAnyActivityData && !activity.fechaCierre) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Registre la fecha fin de actividad',
+          path: ['planMejoramiento', index, 'fechaCierre'],
+        });
+      }
+    });
+
+    if (value.eficacia && !value.fechaEvaluacion) {
       ctx.addIssue({
         code: 'custom',
         message: 'Registre la fecha de evaluación',

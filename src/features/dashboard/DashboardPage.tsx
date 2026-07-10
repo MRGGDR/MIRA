@@ -259,7 +259,7 @@ export function DashboardPage() {
     <div className="stack">
       <PageHeader
         title="MIRA"
-        description="Seguimiento institucional de acciones correctivas, preventivas y de mejora - UNGRD."
+        description="Mejoramiento Institucional, Registro y Avance. Seguimiento de acciones correctivas y de mejora - UNGRD."
         actions={
           <>
             <Link className="button button--primary" to="/acciones/nueva">

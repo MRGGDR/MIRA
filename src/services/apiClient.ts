@@ -99,8 +99,11 @@ async function request<TData>(payload: RequestPayload, safeToRetry = false, time
       }
 
       if (response.ok === false) {
+        const bodyMessage = extractErrorMessage(rawResponse);
         throw new ApiClientError(
-          `Apps Script devolvió HTTP ${response.status} al ejecutar ${payload.action}.`,
+          bodyMessage
+            ? `Apps Script devolvió HTTP ${response.status} al ejecutar ${payload.action}: ${bodyMessage}`
+            : `Apps Script devolvió HTTP ${response.status} al ejecutar ${payload.action}.`,
           'APPS_SCRIPT_HTTP_ERROR',
           {
             action: payload.action,
@@ -139,7 +142,7 @@ async function request<TData>(payload: RequestPayload, safeToRetry = false, time
 }
 
 async function listAllActions(filters: ActionFilters = {}): Promise<CorrectiveAction[]> {
-  const pageSize = 100;
+  const pageSize = 1000;
   const firstPage = await request<ActionListResponse>(
     { action: 'listActions', params: { filters: { ...filters, page: 1, pageSize } } },
     true,
@@ -155,6 +158,15 @@ async function listAllActions(filters: ActionFilters = {}): Promise<CorrectiveAc
   }
 
   return items;
+}
+
+function extractErrorMessage(rawResponse: string): string {
+  try {
+    const parsed = JSON.parse(rawResponse) as { error?: { message?: string } };
+    return parsed.error?.message?.trim() ?? '';
+  } catch {
+    return rawResponse.replace(/\s+/g, ' ').trim().slice(0, 180);
+  }
 }
 
 function isAuthorizationError(code: string): boolean {
@@ -423,6 +435,9 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
       const id = Number(payload.params?.id);
       const index = mockActions.findIndex((item) => item.id === id);
       if (index < 0) throw new ApiClientError('No se encontró la acción solicitada.', 'ACTION_NOT_FOUND');
+      if (mockActions[index].auditorInterno.trim().toLowerCase() !== 'oci') {
+        throw new ApiClientError('Esta acción tiene como evaluador al líder del proceso; no debe enviarse a OCI.', 'OCI_GATE_BLOCKED');
+      }
       if (!areMockActivitiesReadyForOci(mockActions[index])) {
         throw new ApiClientError(
           'No puede notificar a Control Interno hasta completar revisión y validación de todas las actividades.',
@@ -469,10 +484,10 @@ function getCreatedMockStage(data: CreateActionInput): CorrectiveAction['estadoA
 
 function getUpdatedMockStage(data: UpdateActionInput): CorrectiveAction['estadoActual'] {
   if (data.eficacia === 'SI') return 'CERRADA';
-  if (areMockActivitiesReadyForOci(data)) return 'REVISION_OCI';
+  if (areMockActivitiesReadyForOci(data)) return data.auditorInterno.trim().toLowerCase() === 'oci' ? 'REVISION_OCI' : 'VALIDACION';
   if (data.estadoActual === 'REVISION_OCI' && areMockActivitiesExecuted(data)) return 'VALIDACION';
   if (data.estadoActual === 'REVISION_OCI') return 'PLAN_ACCION';
-  if (data.fechasBloqueadas || areMockActivitiesExecuted(data)) return 'VALIDACION';
+  if (data.fechasBloqueadas || hasAnyMockActivityExecuted(data)) return 'VALIDACION';
   return data.estadoActual ?? 'REGISTRO';
 }
 
@@ -489,6 +504,11 @@ function areMockActivitiesExecuted(data: CreateActionInput) {
     activities.length > 0 &&
     activities.every((activity) => activity.revisionFecha && activity.revisionObservacion.trim())
   );
+}
+
+function hasAnyMockActivityExecuted(data: CreateActionInput) {
+  const activities = data.planMejoramiento ?? [];
+  return activities.some((activity) => activity.revisionFecha && activity.revisionObservacion.trim());
 }
 
 function areMockActivitiesValidated(data: CreateActionInput) {
