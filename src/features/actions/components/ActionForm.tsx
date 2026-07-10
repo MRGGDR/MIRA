@@ -29,6 +29,7 @@ interface FieldConfig {
   label: string;
   type: 'text' | 'date' | 'number' | 'textarea' | 'select' | 'datalist';
   options?: string[];
+  placeholder?: string;
   full?: boolean;
   required?: boolean;
   hidden?: boolean;
@@ -67,12 +68,13 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   }, [isDirty]);
 
   const isAdmin = Boolean(currentUser?.permissions.canAdmin);
-  const hasGlobalProcessScope = Boolean(isAdmin || currentUser?.rol === 'OCI');
+  const hasGlobalProcessScope = Boolean(isAdmin || currentUser?.rol === 'OCI' || currentUser?.rol === 'REV');
   const scopedProcesses = hasGlobalProcessScope ? [] : getProcessNamesForAccess(currentUser?.proceso ?? '');
   const originOptions = uniqueOptionSorted(parameters?.origenes ?? []);
   const selectedType = useWatch({ control, name: 'tipoAccion' }) ?? '';
   const selectedActionId = useWatch({ control, name: 'id' }) ?? initialValues.id;
   const selectedProcess = useWatch({ control, name: 'proceso' }) ?? initialValues.proceso ?? currentUser?.proceso ?? '';
+  const selectedEvaluator = useWatch({ control, name: 'auditorInterno' }) ?? initialValues.auditorInterno ?? '';
   const normalizedType = selectedType.toLowerCase();
   const isImprovement = normalizedType.includes('mejora');
   const isCorrective = normalizedType.includes('correctiva');
@@ -80,7 +82,9 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   const processOptions = scopedProcesses.length ? scopedProcesses : PROCESSES.map((item) => item.name);
   const driveUrl = getDriveLinkForProcess(selectedProcess);
   const selectedProcessLeader = useWatch({ control, name: 'liderProceso' }) ?? initialValues.liderProceso ?? '';
-  const evaluatorOptions = uniqueOptionSorted(['OCI', 'Líder del proceso', initialValues.auditorInterno].filter(Boolean));
+  const evaluatorOptions = isCorrective
+    ? ['OCI']
+    : uniqueOptionSorted(['OCI', 'Lider del proceso', initialValues.auditorInterno].filter(Boolean));
   const currentRole = currentUser?.rol;
   const currentState = initialValues.estadoActual;
   const isCreator = currentRole === 'CREADOR';
@@ -139,6 +143,12 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     });
   }, [planFieldArray.fields, selectedProcessLeader, setValue]);
 
+  useEffect(() => {
+    if (isCorrective && selectedEvaluator !== 'OCI') {
+      setValue('auditorInterno', 'OCI', { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+    }
+  }, [isCorrective, selectedEvaluator, setValue]);
+
   const phaseOrder: FormPhase[] = ['registro', 'analisis', 'plan', 'validacion', 'oci'];
   const phaseIndex = phaseOrder.reduce<Record<FormPhase, number>>((acc, phase, index) => {
     acc[phase] = index;
@@ -181,7 +191,15 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         { name: 'proceso', label: 'Proceso o subproceso', type: 'select', options: processOptions, required: true },
         { name: 'identificadoPor', label: 'Registrado por', type: 'text' },
         { name: 'liderProceso', label: 'Líder del proceso', type: 'text' },
-        { name: 'auditorInterno', label: 'Evaluador', type: 'select', options: evaluatorOptions, hidden: !isCorrective },
+        {
+          name: 'auditorInterno',
+          label: 'Evaluador',
+          type: 'select',
+          options: evaluatorOptions,
+          placeholder: isImprovement ? 'Seleccione evaluador...' : undefined,
+          hidden: !(isCorrective || isImprovement),
+          required: true,
+        },
         { name: 'descripcion', label: 'Descripción', type: 'textarea', full: true, required: true },
       ],
     },
@@ -361,13 +379,6 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                       <NestedTextArea
                         label="Descripción de la ejecución"
                         name={`planMejoramiento.${index}.revisionObservacion`}
-                        register={register}
-                        disabled={!canEditPlanExecution}
-                        full
-                      />
-                      <NestedTextArea
-                        label="Observación REV"
-                        name={`planMejoramiento.${index}.observacionRevision`}
                         register={register}
                         disabled={!canEditPlanExecution}
                         full
@@ -830,7 +841,7 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled, read
         <textarea id={id} disabled={disabled} {...common} />
       ) : field.type === 'select' ? (
         <select id={id} disabled={disabled} {...common}>
-          {!field.required ? <option value="">Seleccione...</option> : null}
+          {!field.required || field.placeholder ? <option value="">{field.placeholder ?? 'Seleccione...'}</option> : null}
           {field.options?.map((option) => (
             <option key={option || 'empty'} value={option}>
               {option || 'Sin evaluar'}

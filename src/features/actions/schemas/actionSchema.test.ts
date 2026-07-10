@@ -11,6 +11,7 @@ describe('actionSchema', () => {
       descripcion: 'Hallazgo',
       accion: 'Plan de accion',
       accionContencion: 'Contencion inmediata',
+      auditorInterno: 'OCI',
     });
 
     expect(result.success).toBe(true);
@@ -24,12 +25,25 @@ describe('actionSchema', () => {
       descripcion: 'Hallazgo',
       accion: 'Plan de accion',
       accionContencion: 'Contencion inmediata',
+      auditorInterno: 'OCI',
       fechaInicioAccion: '2026-06-10',
       fechaFinAccion: '2026-06-01',
       presupuesto: -1,
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('accepts an improvement action when the evaluator is OCI or process leader', () => {
+    const result = actionSchema.safeParse({
+      ...getDefaultActionValues('GG'),
+      origen: 'Auditoria interna',
+      tipoAccion: 'Accion de mejora',
+      descripcion: 'Oportunidad de mejora',
+      auditorInterno: 'Lider del proceso',
+    });
+
+    expect(result.success).toBe(true);
   });
 
   it('rejects OCI evaluation when REV or VAL activity fields are missing', () => {
@@ -39,6 +53,7 @@ describe('actionSchema', () => {
       origen: 'Auditoria interna',
       tipoAccion: 'Accion correctiva',
       descripcion: 'Hallazgo',
+      auditorInterno: 'OCI',
       estadoActual: 'REVISION_OCI',
       fechaEvaluacion: '2026-06-10',
       eficacia: 'SI',
@@ -50,7 +65,7 @@ describe('actionSchema', () => {
           fechaCierre: '2026-06-30',
           responsable: 'Responsable',
           revisionFecha: '2026-06-15',
-          revisionObservacion: 'Ejecucion realizada',
+          revisionObservacion: '',
           validacionResponsable: 'Validador',
           validacionFecha: '2026-06-16',
           validacionObservacion: 'Validacion realizada',
@@ -59,7 +74,7 @@ describe('actionSchema', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues.some((issue) => issue.path.includes('observacionRevision'))).toBe(true);
+    expect(result.error?.issues.some((issue) => issue.path.includes('revisionObservacion'))).toBe(true);
   });
 
   it('accepts OCI evaluation when every activity has REV and VAL complete', () => {
@@ -69,6 +84,7 @@ describe('actionSchema', () => {
       origen: 'Auditoria interna',
       tipoAccion: 'Accion correctiva',
       descripcion: 'Hallazgo',
+      auditorInterno: 'OCI',
       estadoActual: 'REVISION_OCI',
       fechaEvaluacion: '2026-06-10',
       eficacia: 'SI',
@@ -81,7 +97,6 @@ describe('actionSchema', () => {
           responsable: 'Responsable',
           revisionFecha: '2026-06-15',
           revisionObservacion: 'Ejecucion realizada',
-          observacionRevision: 'Revision realizada',
           validacionResponsable: 'Validador',
           validacionFecha: '2026-06-16',
           validacionObservacion: 'Validacion realizada',

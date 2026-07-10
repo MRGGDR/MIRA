@@ -128,7 +128,7 @@ function canManageAction(action: CorrectiveAction, user: CurrentUser | null | un
 }
 
 function hasGlobalProcessScope(user: CurrentUser | null | undefined): boolean {
-  return Boolean(user?.permissions.canAdmin || user?.rol === 'OCI');
+  return Boolean(user?.permissions.canAdmin || user?.rol === 'OCI' || user?.rol === 'REV');
 }
 
 export function ActionsListPage() {

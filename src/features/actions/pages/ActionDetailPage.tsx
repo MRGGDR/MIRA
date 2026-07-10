@@ -238,12 +238,6 @@ function PlanActivityReport({ actionId, activity, index }: { actionId: number; a
           responsible={activity.responsable}
         />
         <PlanControlRow
-          chip={<span className="control-chip control-chip--review">REV</span>}
-          date={formatDate(activity.revisionFecha)}
-          observation={activity.observacionRevision}
-          responsible={activity.revisionResponsable || activity.responsable}
-        />
-        <PlanControlRow
           chip={<span className="control-chip control-chip--validation">Val</span>}
           date={formatDate(activity.validacionFecha)}
           observation={activity.validacionObservacion}
@@ -421,7 +415,6 @@ function areActivitiesReadyForOci(action: CorrectiveAction): boolean {
       (activity) =>
         activity.revisionFecha &&
         (activity.revisionObservacion ?? '').trim() &&
-        (activity.observacionRevision ?? '').trim() &&
         (activity.validacionResponsable ?? '').trim() &&
         activity.validacionFecha &&
         (activity.validacionObservacion ?? '').trim(),

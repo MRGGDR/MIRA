@@ -487,7 +487,7 @@ function areMockActivitiesExecuted(data: CreateActionInput) {
   const activities = data.planMejoramiento ?? [];
   return (
     activities.length > 0 &&
-    activities.every((activity) => activity.revisionFecha && activity.revisionObservacion.trim() && activity.observacionRevision.trim())
+    activities.every((activity) => activity.revisionFecha && activity.revisionObservacion.trim())
   );
 }
 

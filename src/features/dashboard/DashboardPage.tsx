@@ -166,7 +166,7 @@ export function DashboardPage() {
   const actionsQuery = useQuery(actionQueries.all());
   const parametersQuery = useQuery(actionQueries.parameters());
   const { user } = useAuth();
-  const hasGlobalProcessScope = Boolean(user?.permissions.canAdmin || user?.rol === 'OCI');
+  const hasGlobalProcessScope = Boolean(user?.permissions.canAdmin || user?.rol === 'OCI' || user?.rol === 'REV');
   const scopedProcess = hasGlobalProcessScope ? '' : (getProcessNamesForAccess(user?.proceso ?? '')[0] ?? '');
   const effectiveProcessFilter = scopedProcess || filterProceso;
   const hasFilters = Boolean(filterOrigen || filterEstado || filterEficacia || (!scopedProcess && filterProceso));

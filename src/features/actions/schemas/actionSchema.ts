@@ -130,6 +130,27 @@ export const actionSchema = z
         activity.validacionFecha ||
         activity.validacionObservacion.trim(),
       );
+    const normalizedActionType = value.tipoAccion.toLowerCase();
+    const isCorrective = normalizedActionType.includes('correctiva');
+    const isImprovement = normalizedActionType.includes('mejora');
+    const evaluator = value.auditorInterno.trim();
+
+    if (isCorrective && evaluator !== 'OCI') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'El evaluador de una acción correctiva debe ser OCI',
+        path: ['auditorInterno'],
+      });
+    }
+
+    if (isImprovement && evaluator !== 'OCI' && evaluator !== 'Líder del proceso' && evaluator !== 'Lider del proceso') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Seleccione OCI o Lider del proceso como evaluador',
+        path: ['auditorInterno'],
+      });
+    }
+
     const isOciEvaluation =
       ['REVISION_OCI', 'CERRADA'].includes(value.estadoActual) ||
       Boolean(value.eficacia || value.fechaEvaluacion || value.evaluacionObservacion.trim());
@@ -146,7 +167,6 @@ export const actionSchema = z
         const requiredFields: Array<[keyof typeof activity, string]> = [
           ['revisionFecha', 'Registre la fecha de ejecución REV'],
           ['revisionObservacion', 'Registre la descripción de ejecución'],
-          ['observacionRevision', 'Registre la observación REV'],
           ['validacionResponsable', 'Registre el responsable de validación'],
           ['validacionFecha', 'Registre la fecha de validación'],
           ['validacionObservacion', 'Registre la observación de validación'],

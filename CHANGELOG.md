@@ -2,6 +2,30 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.2.1] - 2026-07-10
+
+Corrección del flujo de evaluadores y revisión para acciones correctivas y de mejora.
+
+### Flujo por roles
+
+- Se dejó el evaluador de acciones correctivas fijo en `OCI`.
+- Se habilitó para acciones de mejora la selección de evaluador entre `OCI` y `Lider del proceso`.
+- Se permitió que `REV` consulte y gestione acciones en `PLAN_ACCION` de todos los procesos.
+- Se conservó el flujo de validación y evaluación sin abrir permisos de `VAL` u `OCI` al rol `REV`.
+
+### Actividades y revisión
+
+- Se retiró el campo visible `Observación REV` del formulario y del detalle.
+- Se dejó `Descripción de la ejecución` como el texto operativo de REV.
+- Se actualizó la validación del frontend para que `observacionRevision` no sea requerida antes de enviar a validación u OCI.
+- Se actualizó el mock local para avanzar de REV a VAL usando solo fecha de ejecución y descripción de ejecución.
+
+### Validación
+
+- Se agregaron pruebas unitarias para el evaluador de acciones correctivas y de mejora.
+- Se validó contra Apps Script el flujo completo con usuarios CREADOR, REV, VAL y OCI.
+- Se probaron dos acciones end-to-end: correctiva `417` y mejora `418`; ambas avanzaron de `PLAN_ACCION` a `VALIDACION` sin `observacionRevision`, pasaron a `REVISION_OCI` y cerraron como eficaces.
+
 ## [1.2.0] - 2026-07-08
 
 Actualización del flujo de actividades, revisión, validación y evaluación OCI para reforzar permisos, mejorar reportes y corregir la experiencia responsive.
