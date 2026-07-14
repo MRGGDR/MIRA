@@ -477,7 +477,7 @@ export function DashboardPage() {
           <div>
             <span className="workflow-card__eyebrow">Pendientes por rol</span>
             <strong>Etapas activas del flujo</strong>
-            <p>Consulta rapidamente donde se concentra el trabajo por Creador, Revisor, Validador y OCI.</p>
+            <p>Consulta rapidamente donde se concentra el trabajo por Creador, Revisor, Validador y Evaluador.</p>
           </div>
           <div className="workflow-card__actions">
             {roleQueues.map((queue) => (

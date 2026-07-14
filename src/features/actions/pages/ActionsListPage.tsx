@@ -82,10 +82,10 @@ function buildFilterOptions(items: CorrectiveAction[]) {
   };
 }
 
-function filterActionsClient(items: CorrectiveAction[], filters: ActionFilters, stageFilter: string) {
+function filterActionsClient(items: CorrectiveAction[], filters: ActionFilters, stageFilter: string, role?: CurrentUser['rol']) {
   return items.filter((action) => {
     if (filters.id && action.id !== Number(filters.id)) return false;
-    if (stageFilter && action.estadoActual !== stageFilter) return false;
+    if (stageFilter && !matchesStageFilterForRole(action, stageFilter, role)) return false;
     if (filters.proceso && !isSameProcess(action.proceso, filters.proceso)) return false;
     if (filters.estado && getVisualStatus(action) !== filters.estado) return false;
     if (filters.eficacia === 'SIN_EVALUAR' && action.eficacia) return false;
@@ -97,6 +97,13 @@ function filterActionsClient(items: CorrectiveAction[], filters: ActionFilters, 
     }
     return true;
   });
+}
+
+function matchesStageFilterForRole(action: CorrectiveAction, stageFilter: string, role?: CurrentUser['rol']): boolean {
+  if (role === 'REV' && stageFilter === 'PLAN_ACCION') return isActionPendingForRole(action, role);
+  if (role === 'VAL' && stageFilter === 'VALIDACION') return isActionPendingForRole(action, role);
+  if (role === 'OCI' && stageFilter === 'REVISION_OCI') return isActionPendingForRole(action, role);
+  return action.estadoActual === stageFilter;
 }
 
 function uniqueSorted<T extends string>(values: T[], sorter?: (value: T) => string | number): T[] {
@@ -149,8 +156,8 @@ export function ActionsListPage() {
   const reportSummary = useMemo(() => buildPageSummary(sourceItems), [sourceItems]);
   const filterOptions = useMemo(() => buildFilterOptions(sourceItems), [sourceItems]);
   const filteredItems = useMemo(
-    () => filterActionsClient(sourceItems, { ...filters, proceso: effectiveProcessFilter || undefined }, stageFilter),
-    [effectiveProcessFilter, filters, sourceItems, stageFilter],
+    () => filterActionsClient(sourceItems, { ...filters, proceso: effectiveProcessFilter || undefined }, stageFilter, user?.rol),
+    [effectiveProcessFilter, filters, sourceItems, stageFilter, user?.rol],
   );
   const roleQueues = useMemo(() => buildWorkflowRoleQueues(sourceItems), [sourceItems]);
   const trafficLight = useMemo(() => buildWorkflowTrafficLight(sourceItems, user?.rol), [sourceItems, user?.rol]);

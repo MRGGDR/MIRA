@@ -47,10 +47,10 @@ export const WORKFLOW_STAGES: Record<DocumentState, WorkflowStageMeta> = {
   },
   REVISION_OCI: {
     state: 'REVISION_OCI',
-    label: 'Revisión OCI',
-    shortLabel: 'OCI',
+    label: 'Evaluador',
+    shortLabel: 'Evaluador',
     ownerRole: 'OCI',
-    ownerLabel: 'Control Interno',
+    ownerLabel: 'Evaluador',
     tone: 'oci',
   },
   CERRADA: {
@@ -71,9 +71,12 @@ export function isActionPendingForRole(action: CorrectiveAction, role: UserRole 
   if (!role || role === 'CONSULTA' || role === 'ANONIMO') return false;
   if (role === 'ADMIN') return action.estadoActual !== 'CERRADA';
   if (role === 'CREADOR') return action.estadoActual === 'REGISTRO' || action.estadoActual === 'ANALISIS';
-  if (role === 'REV') return action.estadoActual === 'PLAN_ACCION';
+  if (role === 'REV') return ['PLAN_ACCION', 'VALIDACION', 'REVISION_OCI'].includes(action.estadoActual) && hasActivitiesPendingReview(action);
   if (role === 'VAL') {
-    return action.estadoActual === 'VALIDACION' || (action.estadoActual === 'REVISION_OCI' && !isOciEvaluator(action));
+    return (
+      ['VALIDACION', 'REVISION_OCI'].includes(action.estadoActual) &&
+      (hasActivitiesPendingValidation(action) || (isProcessLeaderEvaluator(action) && areActivitiesReadyForFinalEvaluation(action) && !action.eficacia))
+    );
   }
   if (role === 'OCI') return action.estadoActual === 'REVISION_OCI' && isOciEvaluator(action);
   return false;
@@ -88,7 +91,7 @@ export function buildWorkflowRoleQueues(actions: CorrectiveAction[]) {
     { role: 'CREADOR' as const, label: 'Creador', states: ['REGISTRO', 'ANALISIS'] as DocumentState[] },
     { role: 'REV' as const, label: 'Revisor', states: ['PLAN_ACCION'] as DocumentState[] },
     { role: 'VAL' as const, label: 'Validador', states: ['VALIDACION'] as DocumentState[] },
-    { role: 'OCI' as const, label: 'OCI', states: ['REVISION_OCI'] as DocumentState[] },
+    { role: 'OCI' as const, label: 'Evaluador', states: ['REVISION_OCI'] as DocumentState[] },
   ].map((queue) => ({
     ...queue,
     items: actions.filter((action) => isActionPendingForRole(action, queue.role)),
@@ -109,4 +112,48 @@ export function buildWorkflowTrafficLight(actions: CorrectiveAction[], role: Use
 
 function isOciEvaluator(action: CorrectiveAction): boolean {
   return action.auditorInterno.trim().toLowerCase() === 'oci';
+}
+
+function isProcessLeaderEvaluator(action: CorrectiveAction): boolean {
+  const evaluator = action.auditorInterno.trim().toLowerCase();
+  return evaluator === 'lider del proceso' || evaluator === 'líder del proceso';
+}
+
+function getActiveActivities(action: CorrectiveAction) {
+  return (action.planMejoramiento ?? []).filter(
+    (activity) =>
+      activity.actividad.trim() ||
+      activity.responsable.trim() ||
+      activity.fechaApertura ||
+      activity.fechaCierre ||
+      activity.evidencia.trim() ||
+      activity.revisionFecha ||
+      activity.revisionObservacion.trim() ||
+      activity.validacionFecha ||
+      activity.validacionObservacion.trim(),
+  );
+}
+
+function isActivityReviewed(activity: CorrectiveAction['planMejoramiento'][number]): boolean {
+  return Boolean(activity.revisionFecha && activity.revisionObservacion.trim());
+}
+
+function isActivityValidated(activity: CorrectiveAction['planMejoramiento'][number]): boolean {
+  return Boolean(activity.validacionResponsable.trim() && activity.validacionFecha && activity.validacionObservacion.trim());
+}
+
+function hasActivitiesPendingReview(action: CorrectiveAction): boolean {
+  const activities = getActiveActivities(action);
+  if (!activities.length) return action.estadoActual === 'PLAN_ACCION';
+  return activities.some((activity) => !isActivityReviewed(activity));
+}
+
+function hasActivitiesPendingValidation(action: CorrectiveAction): boolean {
+  const activities = getActiveActivities(action);
+  return activities.some((activity) => isActivityReviewed(activity) && !isActivityValidated(activity));
+}
+
+function areActivitiesReadyForFinalEvaluation(action: CorrectiveAction): boolean {
+  const activities = getActiveActivities(action);
+  return activities.length > 0 && activities.every((activity) => isActivityReviewed(activity) && isActivityValidated(activity));
 }

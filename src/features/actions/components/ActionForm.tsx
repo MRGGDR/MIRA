@@ -241,7 +241,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     },
   ];
   const finalEvaluationSection: { title: string; phase: FormPhase; hidden?: boolean; fields: FieldConfig[] } = {
-    title: finalEvaluatorRole === 'VAL' ? 'D. Evaluación del líder del proceso' : 'D. Evaluación OCI',
+    title: finalEvaluatorRole === 'VAL' ? 'D. Evaluación del líder del proceso' : 'D. Evaluación del evaluador',
     phase: 'oci',
     hidden: mode === 'create' && !isAdmin,
     fields: [
@@ -650,7 +650,7 @@ function getPhaseLabel(phase: FormPhase) {
     analisis: 'Análisis',
     plan: 'Plan',
     validacion: 'Validación',
-    oci: 'OCI',
+    oci: 'Evaluador',
   };
   return labels[phase];
 }

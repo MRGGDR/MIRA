@@ -2,6 +2,25 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.2.4] - 2026-07-14
+
+Correccion del trabajo parcial de actividades para `REV` y `VAL`.
+
+### Flujo por actividades
+
+- Se ajusto la bandeja de `REV` para que una accion siga apareciendo mientras tenga actividades pendientes de revision, aunque otra actividad ya haya pasado a validacion.
+- Se ajusto la bandeja de `VAL` para que aparezcan acciones con actividades revisadas pendientes de validacion, sin exigir que todas esten revisadas.
+- Se conserva bloqueada la validacion de actividades que todavia no tienen revision `REV`.
+- Se mantiene el paso a evaluacion final solo cuando todas las actividades activas tienen revision `REV` y validacion `VAL` completas.
+
+### Etiquetas
+
+- Se cambio la etiqueta visible de la ultima etapa de `OCI` a `Evaluador`, conservando el codigo interno `REVISION_OCI` y el rol `OCI`.
+
+### Validacion tecnica
+
+- Se agregaron pruebas unitarias para pendientes parciales de `REV` y `VAL`.
+
 ## [1.2.3] - 2026-07-14
 
 Correccion de procesos equivalentes, validacion por actividad y respuesta de contencion.
