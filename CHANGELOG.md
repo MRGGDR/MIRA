@@ -2,6 +2,35 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.2.3] - 2026-07-14
+
+Correccion de procesos equivalentes, validacion por actividad y respuesta de contencion.
+
+### Procesos y filtros
+
+- Se normalizo la comparacion de procesos para que coincidan aunque tengan o no tildes, mayusculas o nombres heredados.
+- Se corrigio la visibilidad de acciones para usuarios `VAL` de Planeacion Estrategica cuando la accion y el usuario tienen variantes como `Planeacion Estrategica`, `Planeación Estratégica` o `PE`.
+- Se ajustaron dashboard, bandeja de acciones, mocks y estadisticas de Apps Script para agrupar procesos sin duplicados por variantes del mismo nombre.
+- Se agregaron pruebas unitarias para procesos con/sin tildes, codigos heredados y alias de subprocesos.
+
+### Actividades y validacion
+
+- Se cambio la validacion por actividad a `Fue validada la actividad?` con opciones `SI` y `NO`.
+- Se dejo `Fue eficaz?` solo en la evaluacion de `OCI`; cuando evalua el lider del proceso se muestra `Fue validada la accion?`.
+- Se mantiene la fecha de validacion por cada actividad, permitiendo validar una actividad hoy y otra despues sin sobrescribir la anterior.
+
+### Contencion
+
+- Se dejo la respuesta de contencion `REV` como un unico campo por accion, no por cada actividad.
+- Se actualizo el detalle para mostrar una sola respuesta de contencion junto a la accion de contencion registrada.
+
+### Validacion tecnica
+
+- Se ejecuto `npm test -- --run`.
+- Se ejecuto `npm run build`.
+- Se ejecuto `npm run lint`; quedaron solo advertencias existentes de Fast Refresh.
+- Se valido la sintaxis de los archivos `.gs` modificados con el parser de Node.
+
 ## [1.2.2] - 2026-07-10
 
 Actualizacion del flujo por evaluador, validacion por actividad y rendimiento de carga contra Apps Script.

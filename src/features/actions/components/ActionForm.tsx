@@ -75,7 +75,8 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   const selectedActionId = useWatch({ control, name: 'id' }) ?? initialValues.id;
   const selectedProcess = useWatch({ control, name: 'proceso' }) ?? initialValues.proceso ?? currentUser?.proceso ?? '';
   const selectedEvaluator = useWatch({ control, name: 'auditorInterno' }) ?? initialValues.auditorInterno ?? '';
-  const watchedActivities = useWatch({ control, name: 'planMejoramiento' }) ?? [];
+  const watchedPlanActivities = useWatch({ control, name: 'planMejoramiento' });
+  const watchedActivities = useMemo(() => watchedPlanActivities ?? [], [watchedPlanActivities]);
   const normalizedType = selectedType.toLowerCase();
   const isImprovement = normalizedType.includes('mejora');
   const isCorrective = normalizedType.includes('correctiva');
@@ -245,7 +246,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     hidden: mode === 'create' && !isAdmin,
     fields: [
       { name: 'fechaEvaluacion', label: 'Fecha de evaluación', type: 'date' },
-      { name: 'eficacia', label: 'Fue eficaz?', type: 'select', options: ['', 'SI', 'NO'] },
+      { name: 'eficacia', label: finalEvaluatorRole === 'OCI' ? 'Fue eficaz?' : 'Fue validada la acción?', type: 'select', options: ['', 'SI', 'NO'] },
       { name: 'evaluacionObservacion', label: 'Observación de la acción', type: 'textarea', full: true },
     ],
   };
@@ -367,6 +368,17 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
           }
           disabled={!canAddOrRemoveActivities}
         />
+        {showExecutionFields && isCorrective && planFieldArray.fields.length ? (
+          <div className="form-grid">
+            <NestedTextArea
+              label="Respuesta a la acción de contención REV"
+              name="planMejoramiento.0.observacionRevision"
+              register={register}
+              disabled={!canEditPlanExecution}
+              full
+            />
+          </div>
+        ) : null}
         <div className="dynamic-plan-grid">
           {planFieldArray.fields.length ? (
             planFieldArray.fields.map((field, index) => (
@@ -407,13 +419,6 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                         disabled={!canEditPlanExecution}
                         full
                       />
-                      <NestedTextArea
-                        label="Respuesta de contención REV"
-                        name={`planMejoramiento.${index}.observacionRevision`}
-                        register={register}
-                        disabled={!canEditPlanExecution}
-                        full
-                      />
                     </>
                   ) : null}
                   {showValidationFields ? (
@@ -434,7 +439,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                         type="date"
                       />
                       <NestedSelect
-                        label="Fue eficaz?"
+                        label="Fue validada la actividad?"
                         name={`planMejoramiento.${index}.validacionObservacion`}
                         register={register}
                         disabled={!canEditPlanValidation || !isActivityReviewed(watchedActivities[index])}
@@ -665,6 +670,8 @@ function buildActivityCode(actionId: number | undefined, activityNumber: number)
 }
 
 function syncLegacyPlanFields(values: ActionFormValues): ActionFormValues {
+  const containmentResponse =
+    values.planMejoramiento.find((activity) => activity.observacionRevision?.trim())?.observacionRevision ?? '';
   const activities = values.planMejoramiento.map((activity, index) => ({
     ...activity,
     idActividad: buildActivityCode(values.id, index + 1),
@@ -673,7 +680,7 @@ function syncLegacyPlanFields(values: ActionFormValues): ActionFormValues {
     revisionResponsable: activity.responsable,
     validacionResponsable: values.liderProceso || activity.validacionResponsable,
     evidencia: activity.evidencia ?? '',
-    observacionRevision: activity.observacionRevision ?? '',
+    observacionRevision: index === 0 ? containmentResponse : '',
   }));
   const firstActivity = activities.find((activity) => activity.actividad || activity.responsable || activity.fechaApertura || activity.fechaCierre);
   const lastEndDate = [...activities].reverse().find((activity) => activity.fechaCierre)?.fechaCierre ?? '';

@@ -178,7 +178,7 @@ export const actionSchema = z
           ['revisionObservacion', 'Registre la descripción de ejecución'],
           ['validacionResponsable', 'Registre el responsable de validación'],
           ['validacionFecha', 'Registre la fecha de validación'],
-          ['validacionObservacion', 'Seleccione si fue eficaz'],
+          ['validacionObservacion', 'Seleccione si fue validada la actividad'],
         ];
         requiredFields.forEach(([field, message]) => {
           const fieldValue = activity[field];

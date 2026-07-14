@@ -123,20 +123,22 @@ const PROCESS_NAME_ALIASES: Record<string, string> = {
 };
 
 export function getProcessName(codeOrName: string): string {
-  return (
-    PROCESSES.find((process) => process.code === codeOrName || process.name === codeOrName)?.name ??
-    PROCESS_NAME_ALIASES[codeOrName] ??
-    LEGACY_PROCESS_NAMES[codeOrName]?.[0] ??
-    codeOrName
-  );
+  if (!codeOrName) return '';
+  const directMatch = findProcessByCodeOrName(codeOrName);
+  if (directMatch) return directMatch.name;
+  const alias = findProcessAlias(codeOrName);
+  if (alias) return alias;
+  const legacy = LEGACY_PROCESS_NAMES[codeOrName.trim().toUpperCase()];
+  return legacy?.[0] ?? codeOrName;
 }
 
 export function getProcessNamesForAccess(codeOrName: string): string[] {
   if (!codeOrName) return [];
-  const directMatch = PROCESSES.find((process) => process.code === codeOrName || process.name === codeOrName);
+  const directMatch = findProcessByCodeOrName(codeOrName);
   if (directMatch) return [directMatch.name];
-  if (PROCESS_NAME_ALIASES[codeOrName]) return [PROCESS_NAME_ALIASES[codeOrName]];
-  return LEGACY_PROCESS_NAMES[codeOrName] ?? [codeOrName];
+  const alias = findProcessAlias(codeOrName);
+  if (alias) return [alias];
+  return LEGACY_PROCESS_NAMES[codeOrName.trim().toUpperCase()] ?? [codeOrName];
 }
 
 export function getDriveLinkForProcess(codeOrName: string): string {
@@ -145,5 +147,39 @@ export function getDriveLinkForProcess(codeOrName: string): string {
 }
 
 export function isLegacyProcessCode(value: string): boolean {
-  return Boolean(LEGACY_PROCESS_NAMES[value]);
+  return Boolean(LEGACY_PROCESS_NAMES[value.trim().toUpperCase()]);
+}
+
+export function processIdentity(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+export function isSameProcess(left: string, right: string): boolean {
+  if (!left || !right) return false;
+  const leftNames = getProcessNamesForAccess(left);
+  const rightNames = getProcessNamesForAccess(right);
+  return leftNames.some((leftName) =>
+    rightNames.some((rightName) => processIdentity(leftName) === processIdentity(rightName)),
+  );
+}
+
+function findProcessByCodeOrName(codeOrName: string): ProcessConfig | undefined {
+  const value = codeOrName.trim();
+  const code = value.toUpperCase();
+  const identity = processIdentity(value);
+  return PROCESSES.find((process) => process.code === code || processIdentity(process.name) === identity);
+}
+
+function findProcessAlias(codeOrName: string): string | undefined {
+  const value = codeOrName.trim();
+  const identity = processIdentity(value);
+  const exactAlias = PROCESS_NAME_ALIASES[value];
+  if (exactAlias) return exactAlias;
+  const aliasEntry = Object.entries(PROCESS_NAME_ALIASES).find(([alias]) => processIdentity(alias) === identity);
+  return aliasEntry?.[1];
 }

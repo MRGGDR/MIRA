@@ -200,6 +200,7 @@ function DetailSection({
 
 function PlanSection({ action }: { action: CorrectiveAction }) {
   const activities = buildPlanActivities(action);
+  const containmentResponse = activities.find((activity) => activity.observacionRevision.trim())?.observacionRevision ?? '';
 
   return (
     <section className="detail-card">
@@ -208,6 +209,21 @@ function PlanSection({ action }: { action: CorrectiveAction }) {
         title="Plan de actividades"
         subtitle="Actividades, responsables, ejecución, evidencias y validación."
       />
+      {containmentResponse ? (
+        <div className="plan-control-row">
+          <div className="plan-control-row__head">
+            <div className="plan-control-row__type">
+              <span className="control-chip">Contención</span>
+            </div>
+          </div>
+          <div className="plan-control-row__observation">
+            <span>Acción de contención</span>
+            <p>{action.accionContencion || 'Sin registrar'}</p>
+            <span>Respuesta REV</span>
+            <p>{containmentResponse}</p>
+          </div>
+        </div>
+      ) : null}
       <div className="plan-report-list">
         {activities.map((activity, index) => (
           <PlanActivityReport actionId={action.id} activity={activity} index={index} key={getActivityCode(action.id, activity, index)} />
@@ -240,7 +256,6 @@ function PlanActivityReport({ actionId, activity, index }: { actionId: number; a
           chip={<span className="control-chip">Ejecución</span>}
           date={formatDate(activity.revisionFecha)}
           observation={activity.revisionObservacion}
-          secondaryObservation={activity.observacionRevision}
           responsible={activity.responsable}
         />
         <PlanControlRow
@@ -280,13 +295,11 @@ function PlanControlRow({
   responsible,
   date,
   observation,
-  secondaryObservation,
 }: {
   chip: ReactNode;
   responsible: string;
   date: string;
   observation: string;
-  secondaryObservation?: string;
 }) {
   return (
     <div className="plan-control-row">
@@ -304,7 +317,6 @@ function PlanControlRow({
       <div className="plan-control-row__observation">
         <span>Detalle</span>
         <p>{observation || 'Sin registrar'}</p>
-        {secondaryObservation ? <p>Respuesta de contención REV: {secondaryObservation}</p> : null}
       </div>
     </div>
   );

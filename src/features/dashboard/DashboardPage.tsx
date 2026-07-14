@@ -34,7 +34,7 @@ import { AccessContextBanner } from '@/components/common/AccessContextBanner';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
-import { getProcessName, getProcessNamesForAccess, PROCESSES } from '@/config/processes';
+import { getProcessName, getProcessNamesForAccess, isSameProcess, PROCESSES } from '@/config/processes';
 import { actionQueries } from '@/features/actions/api/actionQueries';
 import type { CorrectiveAction } from '@/features/actions/types';
 import { getVisualStatus, isActionExpired } from '@/features/actions/utils/status';
@@ -129,7 +129,7 @@ function filterDashboardActions(
 ) {
   return actions.filter((action) => {
     if (filters.origen && action.origen !== filters.origen) return false;
-    if (filters.proceso && action.proceso !== filters.proceso) return false;
+    if (filters.proceso && !isSameProcess(action.proceso, filters.proceso)) return false;
     if (filters.estado && getVisualStatus(action) !== filters.estado) return false;
     if (filters.eficacia === 'SIN_EVALUAR' && action.eficacia) return false;
     if (filters.eficacia && filters.eficacia !== 'SIN_EVALUAR' && action.eficacia !== filters.eficacia) return false;
@@ -140,7 +140,8 @@ function filterDashboardActions(
 function buildDashboardStats(actions: CorrectiveAction[]) {
   const processTotals = new Map<string, number>();
   actions.forEach((action) => {
-    processTotals.set(action.proceso, (processTotals.get(action.proceso) ?? 0) + 1);
+    const processName = getProcessName(action.proceso);
+    processTotals.set(processName, (processTotals.get(processName) ?? 0) + 1);
   });
 
   return {
@@ -203,8 +204,8 @@ export function DashboardPage() {
   const processOptions = scopedProcess
     ? [scopedProcess]
     : uniqueOptionSorted([
-        ...(parametersQuery.data?.procesos ?? []),
-        ...allActions.map((action) => action.proceso),
+        ...(parametersQuery.data?.procesos ?? []).map((process) => getProcessName(process)),
+        ...allActions.map((action) => getProcessName(action.proceso)),
         ...PROCESSES.map((process) => process.name),
       ]);
 
@@ -235,7 +236,7 @@ export function DashboardPage() {
     { label: 'Sin evaluar', value: sinEvaluar, color: '#D2D3D5', filter: 'SIN_EVALUAR' },
   ];
 
-  const totalsByProcess = new Map(stats.porProceso.map((item) => [item.proceso, item.total]));
+  const totalsByProcess = new Map(stats.porProceso.map((item) => [getProcessName(item.proceso), item.total]));
   const processChartData = processOptions.map((process) => ({
     proceso: process,
     total: totalsByProcess.get(process) ?? 0,
@@ -686,7 +687,7 @@ export function DashboardPage() {
               </div>
               <p className="recent-item__desc">{compactText(action.descripcion)}</p>
               <div className="recent-item__footer">
-                <span className="process-badge">{action.proceso}</span>
+                <span className="process-badge">{getProcessName(action.proceso)}</span>
                 <span className="recent-item__arrow">
                   <ArrowRight aria-hidden size={13} />
                 </span>

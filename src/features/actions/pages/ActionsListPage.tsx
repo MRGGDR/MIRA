@@ -17,7 +17,7 @@ import { Link } from 'react-router-dom';
 import { AccessContextBanner } from '@/components/common/AccessContextBanner';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
-import { getProcessName, getProcessNamesForAccess } from '@/config/processes';
+import { getProcessName, getProcessNamesForAccess, isSameProcess } from '@/config/processes';
 import { actionQueries } from '@/features/actions/api/actionQueries';
 import type { ActionFilters, CorrectiveAction, CurrentUser, DocumentState } from '@/features/actions/types';
 import { getVisualStatus, isActionExpired } from '@/features/actions/utils/status';
@@ -74,7 +74,7 @@ function buildFilterOptions(items: CorrectiveAction[]) {
   return {
     ids: uniqueSorted(items.map((action) => String(action.id)), (value) => Number(value)),
     reports: uniqueSorted(items.map((action) => action.descripcion).filter(Boolean)),
-    procesos: uniqueOptionSorted(items.map((action) => action.proceso).filter(Boolean)),
+    procesos: uniqueOptionSorted(items.map((action) => getProcessName(action.proceso)).filter(Boolean)),
     estados: uniqueSorted(items.map((action) => getVisualStatus(action))),
     eficacias: uniqueSorted(items.map(efficacyValue)),
     responsables: uniqueSorted(items.map((action) => action.responsable).filter(Boolean)),
@@ -86,7 +86,7 @@ function filterActionsClient(items: CorrectiveAction[], filters: ActionFilters, 
   return items.filter((action) => {
     if (filters.id && action.id !== Number(filters.id)) return false;
     if (stageFilter && action.estadoActual !== stageFilter) return false;
-    if (filters.proceso && action.proceso !== filters.proceso) return false;
+    if (filters.proceso && !isSameProcess(action.proceso, filters.proceso)) return false;
     if (filters.estado && getVisualStatus(action) !== filters.estado) return false;
     if (filters.eficacia === 'SIN_EVALUAR' && action.eficacia) return false;
     if (filters.eficacia && filters.eficacia !== 'SIN_EVALUAR' && action.eficacia !== filters.eficacia) return false;
@@ -475,7 +475,7 @@ export function ActionsListPage() {
                       </td>
                       <td>{formatDate(action.fechaElaboracion)}</td>
                       <td>
-                        <span className="process-badge">{action.proceso}</span>
+                        <span className="process-badge">{getProcessName(action.proceso)}</span>
                       </td>
                       <td>{action.tipoAccion}</td>
                       <td>

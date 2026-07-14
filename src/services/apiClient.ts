@@ -1,5 +1,5 @@
 import { env } from '@/config/env';
-import { PROCESS_LEADERS, PROCESSES } from '@/config/processes';
+import { isSameProcess, PROCESS_LEADERS, PROCESSES } from '@/config/processes';
 import type { ApiResponse } from '@/types/api';
 import type {
   ActionFilters,
@@ -461,7 +461,7 @@ function readFilters(params: RequestParams | undefined): ActionFilters {
 function filterActions(actions: CorrectiveAction[], filters: ActionFilters): CorrectiveAction[] {
   return actions.filter((action) => {
     if (filters.id && action.id !== Number(filters.id)) return false;
-    if (filters.proceso && action.proceso !== filters.proceso) return false;
+    if (filters.proceso && !isSameProcess(action.proceso, filters.proceso)) return false;
     if (filters.estado === 'VENCIDA' && !isActionExpired(action)) return false;
     if (filters.estado === 'ABIERTA' && (action.estado !== 'ABIERTA' || isActionExpired(action))) return false;
     if (filters.estado === 'CERRADA' && action.estado !== 'CERRADA') return false;
@@ -534,7 +534,7 @@ function buildMockStats(): DashboardStats {
     noEficaces: mockActions.filter((action) => action.eficacia === 'NO').length,
     porProceso: PROCESSES.map((process) => ({
       proceso: process.name,
-      total: mockActions.filter((action) => action.proceso === process.name).length,
+      total: mockActions.filter((action) => isSameProcess(action.proceso, process.name)).length,
     })).filter((item) => item.total > 0),
     recientes: mockActions.slice(0, 5),
   };
