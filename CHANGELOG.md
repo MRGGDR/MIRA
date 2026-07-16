@@ -2,6 +2,14 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.2.5] - 2026-07-16
+
+Actualizacion de etiqueta visible para el evaluador de Control Interno.
+
+### Evaluador
+
+- Se cambio la etiqueta visible de la opcion `OCI` en el desplegable de `Evaluador` a `Jefe de Control Interno`, conservando `OCI` como valor interno para mantener el flujo y las validaciones existentes.
+
 ## [1.2.4] - 2026-07-14
 
 Correccion del trabajo parcial de actividades para `REV` y `VAL`.

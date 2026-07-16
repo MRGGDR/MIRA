@@ -981,7 +981,7 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled, read
           {!field.required || field.placeholder ? <option value="">{field.placeholder ?? 'Seleccione...'}</option> : null}
           {field.options?.map((option) => (
             <option key={option || 'empty'} value={option}>
-              {option || 'Sin evaluar'}
+              {getOptionLabel(field.name, option)}
             </option>
           ))}
         </select>
@@ -1006,4 +1006,10 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled, read
       {error ? <span className="field-error">{error}</span> : null}
     </div>
   );
+}
+
+function getOptionLabel(fieldName: FieldName, option: string): string {
+  if (!option) return 'Sin evaluar';
+  if (fieldName === 'auditorInterno' && option === 'OCI') return 'Jefe de Control Interno';
+  return option;
 }
