@@ -6,6 +6,7 @@ import {
   BarChart3,
   CheckCircle2,
   Clock,
+  Database,
   FilePlus2,
   Search,
   SlidersHorizontal,
@@ -43,6 +44,8 @@ import { useAuth } from '@/features/auth/AuthContext';
 import { compactText, uniqueOptionSorted } from '@/utils/format';
 
 const DEFAULT_ORIGIN_OPTIONS = ['Auditoria externa', 'Auditoria interna', 'Entes de control', 'Indicadores', 'PQRS', 'Otro'];
+const DATABASE_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1df__G1UGCjOWOGkE2yKOwcCCWINosDRE0dVRWhJhRqY/edit?usp=sharing';
 
 const KPI_CONFIG = [
   {
@@ -263,6 +266,15 @@ export function DashboardPage() {
         description="Mejoramiento Institucional, Registro y Avance. Seguimiento de acciones correctivas y de mejora - UNGRD."
         actions={
           <>
+            <a
+              className="button button--secondary"
+              href={DATABASE_SPREADSHEET_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <Database aria-hidden size={16} />
+              Base de datos
+            </a>
             <Link className="button button--primary" to="/acciones/nueva">
               <FilePlus2 aria-hidden size={16} />
               Reportar acción

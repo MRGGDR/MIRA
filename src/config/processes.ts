@@ -46,30 +46,12 @@ export const PROCESS_LEADERS = [
   'Yesid Alonso Salamanca Zuluaga',
 ];
 
-export const PROCESS_DRIVE_LINKS: Record<string, string> = {
-  'Gestión Gerencial (Dirección General)': 'https://drive.google.com/drive/folders/1NEbkOlyWeyKn-fMp17YwB0JOv3fNvG_r?usp=sharing',
-  'Gestión Gerencial (Subdirección General)': 'https://drive.google.com/drive/folders/1k0wEhjDn8p7NSai5V6UEOzRiaxfl6Xvn?usp=sharing',
-  'Gestión Gerencial (Secretaría General)': 'https://drive.google.com/drive/folders/1c7PAIQsslwYgY5IaPpTb1U0J7kJ12fAj?usp=sharing',
-  'Planeación Estratégica': 'https://drive.google.com/drive/folders/1CpBwoc5P01W2AZctASXlD7LMqQUeYXem?usp=sharing',
-  SIPLAG: 'https://drive.google.com/drive/folders/1IcURbjJ2DWtncOu7xZU-AiwaSiP0h9DK?usp=sharing',
-  'Gestión Jurídica': 'https://drive.google.com/drive/folders/1EnFV5T04gSRrwEuBxwt0kFtxOaTF8usZ?usp=sharing',
-  'Gestión de Comunicaciones': 'https://drive.google.com/drive/folders/1Z21OGAywROqK5j3osjrs7WbQIXSww8Vp?usp=sharing',
-  'Evaluación y Seguimiento': 'https://drive.google.com/drive/folders/1rlGIaDoyhY6_L0N_-nORA9Jb_OV-V_CH?usp=sharing',
-  'Gestión de Conocimiento del Riesgo': 'https://drive.google.com/drive/folders/1Moh8X7v36V4rJrPv_CHDt8kXeB9PDxlq?usp=sharing',
-  'Gestión de Reducción del Riesgo': 'https://drive.google.com/drive/folders/1068zYn9yX36-GicMx-11kWXphOMnX6pt?usp=sharing',
-  'Gestión de Manejo de Desastres': 'https://drive.google.com/drive/folders/1ze2Ca6hDVxfy0wdHgRPHt1sNPpKkMxM2?usp=sharing',
-  'Tecnologías de la Información': 'https://drive.google.com/drive/folders/1-n3YtyrCGqust2kWx8-3KepFuv98WSKM?usp=sharing',
-  'Gestión del Talento Humano': 'https://drive.google.com/drive/folders/1HsCAajjr58eds7Vb8hzy7vl8PhSVNQds?usp=sharing',
-  'Gestión Financiera': 'https://drive.google.com/drive/folders/1QJf1ivDXErIhR9hM_2_pw9_1_1d7ZhA2?usp=sharing',
-  'Gestión Administrativa': 'https://drive.google.com/drive/folders/1T-a8ibBGWbamr3jlclSe0Ci5BybXtj4p?usp=sharing',
-  'Subproceso Gestión Documental': 'https://drive.google.com/drive/folders/10MSPkBJZWkJvkGF_muP8lYyBKEqaySiM?usp=sharing',
-  'Subproceso Gestión Bienes': 'https://drive.google.com/drive/folders/1Qy_dgCgqgQdn9Ukw-unTasMn4Bjluy2J?usp=sharing',
-  'Subproceso Servicios Administrativos': 'https://drive.google.com/drive/folders/1T-a8ibBGWbamr3jlclSe0Ci5BybXtj4p?usp=sharing',
-  'Gestión de Control Disciplinario': 'https://drive.google.com/drive/folders/1aISaEcdX_APYUyoDIPEHrLn8uavkOtTj?usp=sharing',
-  'Gestión Contratación': 'https://drive.google.com/drive/folders/1Gvb5q_IuiJ9pRH5vBsPeCTNvWhxtb3wT?usp=sharing',
-  'Gestión para Cooperación Internacional': 'https://drive.google.com/drive/folders/1lOQFBXKa2_GJk52WRn0sINwUpyvgcRV0?usp=sharing',
-  'Relacionamiento con el Ciudadano': 'https://drive.google.com/drive/folders/1c4IGLl7Ibb5fUBLkjy2qcE6St29UpxMP?usp=sharing',
-};
+export const REPORTING_DRIVE_LINK =
+  'https://drive.google.com/drive/folders/1MuhOFrFjilfn-j1BHfzOfchwbJRxASbh?usp=sharing';
+
+export const PROCESS_DRIVE_LINKS: Record<string, string> = Object.fromEntries(
+  PROCESSES.map(({ name }) => [name, REPORTING_DRIVE_LINK]),
+);
 
 export const LEGACY_PROCESS_NAMES: Record<string, string[]> = {
   CD: ['Gestión de Control Disciplinario'],
@@ -143,7 +125,7 @@ export function getProcessNamesForAccess(codeOrName: string): string[] {
 
 export function getDriveLinkForProcess(codeOrName: string): string {
   const processName = getProcessName(codeOrName);
-  return PROCESS_DRIVE_LINKS[processName] ?? '';
+  return PROCESS_DRIVE_LINKS[processName] ?? REPORTING_DRIVE_LINK;
 }
 
 export function isLegacyProcessCode(value: string): boolean {
