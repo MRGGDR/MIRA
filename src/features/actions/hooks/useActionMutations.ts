@@ -6,9 +6,12 @@ export function useCreateAction() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateActionInput) => apiClient.createAction(input),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['actions'] });
-      await queryClient.invalidateQueries({ queryKey: ['stats'] });
+    onSuccess: (action) => {
+      queryClient.setQueryData(['actions', action.id], action);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['actions'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+      ]);
     },
   });
 }
@@ -17,10 +20,12 @@ export function useUpdateAction() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateActionInput) => apiClient.updateAction(input),
-    onSuccess: async (action) => {
-      await queryClient.invalidateQueries({ queryKey: ['actions'] });
-      await queryClient.invalidateQueries({ queryKey: ['actions', action.id] });
-      await queryClient.invalidateQueries({ queryKey: ['stats'] });
+    onSuccess: (action) => {
+      queryClient.setQueryData(['actions', action.id], action);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['actions'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+      ]);
     },
   });
 }

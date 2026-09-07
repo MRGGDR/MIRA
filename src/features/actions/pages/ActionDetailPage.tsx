@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import {
-  ClipboardCheck,
   ExternalLink,
   FileText,
   ListChecks,
@@ -11,17 +10,25 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
 import { FeedbackMessage, type FeedbackMessageState } from '@/components/feedback/FeedbackMessage';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { actionQueries } from '@/features/actions/api/actionQueries';
+import {
+  ACTION_FIELD_LABELS,
+  ACTION_SECTION_TITLES,
+  getEffectivenessLabel,
+  getEvaluatorLabel,
+  getEvaluationSectionTitle,
+} from '@/features/actions/config/actionPresentation';
 import { apiClient } from '@/services/apiClient';
 import { useAuth } from '@/features/auth/AuthContext';
 import type { CorrectiveAction, ImprovementPlanActivity } from '@/features/actions/types';
-import { isActionPendingForRole } from '@/features/actions/utils/workflow';
+import { canCreatorMaintainAction, canRevMaintainAction, isActionPendingForRole } from '@/features/actions/utils/workflow';
+import { isActionInUserProcessScope } from '@/features/auth/access';
 import { formatDate } from '@/utils/date';
 
 type DetailField = {
@@ -47,6 +54,7 @@ export function ActionDetailPage() {
   if (actionQuery.isLoading) return <LoadingState label="Cargando acción..." />;
   if (actionQuery.isError) return <ErrorMessage error={actionQuery.error} />;
   if (!actionQuery.data) return <ErrorMessage error={new Error('Acción no encontrada.')} />;
+  if (!isActionInUserProcessScope(actionQuery.data, user)) return <Navigate to="/acciones" replace />;
 
   const action = actionQuery.data;
   const effectivenessStatus =
@@ -63,9 +71,10 @@ export function ActionDetailPage() {
   const canEditAction = Boolean(
     user?.permissions.canAdmin ||
       isActionPendingForRole(action, user?.rol) ||
-      (user?.rol === 'CREADOR' && user.permissions.canUpdate && action.estado !== 'CERRADA' && action.estadoActual !== 'CERRADA') ||
-      (user?.rol === 'REV' && user.permissions.canEditPlan && action.estadoActual !== 'CERRADA'),
+      (user?.rol === 'CREADOR' && user.permissions.canUpdate && canCreatorMaintainAction(action)) ||
+      (user?.rol === 'REV' && user.permissions.canEditPlan && canRevMaintainAction(action)),
   );
+  const showsCauseAnalysis = !action.tipoAccion.toLowerCase().includes('mejora');
   const feedback = (location.state as { feedback?: FeedbackMessageState } | null)?.feedback;
 
   return (
@@ -104,59 +113,45 @@ export function ActionDetailPage() {
           <StatusBadge status={effectivenessStatus} />
         </div>
         <div className="record-overview__grid">
-          <SummaryItem label="Código" value={activityCodes} />
+          <SummaryItem label="Códigos de actividad" value={activityCodes} />
           <SummaryItem label="Sistema de Gestión" value="S I P L A G" />
-          <SummaryItem label="Fecha de Inicio" value={formatDate(action.fechaElaboracion)} />
-          <SummaryItem label="Fecha de Cierre" value={formatDate(action.fechaCierre)} />
+          <SummaryItem label={ACTION_FIELD_LABELS.fechaElaboracion} value={formatDate(action.fechaElaboracion)} />
+          <SummaryItem label="Fecha fin de la última actividad" value={formatDate(action.fechaCierre)} />
         </div>
       </section>
 
       <DetailSection
         icon={FileText}
-        title="Datos del Mejoramiento"
-        subtitle="Encabezado principal del registro, tal como se consulta en la impresión de NeoGestión."
+        title={ACTION_SECTION_TITLES.registro}
+        subtitle="Información registrada al reportar la acción."
         fields={[
-          { label: 'Mejoramiento', value: String(action.id) },
-          { label: 'Sistema de Gestión', value: 'S I P L A G' },
-          { label: 'Clase', value: action.origen },
-          { label: 'Tipo', value: action.tipoAccion },
-          { label: 'Proceso', value: action.proceso },
-          { label: 'De', value: action.identificadoPor },
-          { label: 'Para', value: action.liderProceso },
-          { label: 'Estado', value: action.estado },
-          { label: 'Evaluador', value: action.auditorInterno },
+          { label: ACTION_FIELD_LABELS.id, value: String(action.id) },
+          { label: ACTION_FIELD_LABELS.fechaElaboracion, value: formatDate(action.fechaElaboracion) },
+          { label: ACTION_FIELD_LABELS.origen, value: action.origen },
+          { label: ACTION_FIELD_LABELS.tipoAccion, value: action.tipoAccion },
+          { label: ACTION_FIELD_LABELS.proceso, value: action.proceso },
+          { label: ACTION_FIELD_LABELS.identificadoPor, value: action.identificadoPor },
+          { label: ACTION_FIELD_LABELS.liderProceso, value: action.liderProceso },
+          { label: ACTION_FIELD_LABELS.auditorInterno, value: getEvaluatorLabel(action.auditorInterno) },
+          { label: ACTION_FIELD_LABELS.descripcion, value: action.descripcion, wide: true },
         ]}
       />
 
-      <DetailSection
-        icon={ClipboardCheck}
-        title="Descripción"
-        fields={[
-          { label: 'Descripción', value: action.descripcion, wide: true },
-        ]}
-      />
-
-      <DetailSection
-        icon={ShieldCheck}
-        title="Acción de Contención"
-        fields={[
-          { label: 'Descripción de la Acción de Contención', value: action.accionContencion, wide: true },
-        ]}
-      />
-
-      <DetailSection
-        icon={Network}
-        title="BRAINSTORMING - Definición de Causas Potenciales"
-        fields={[
-          { label: 'Causa', value: action.identificacionCausas, wide: true },
-          { label: 'Descripción', value: action.causaRaiz, wide: true },
-          { label: 'Empleado', value: action.identificadoPor },
-        ]}
-      />
+      {showsCauseAnalysis ? (
+        <DetailSection
+          icon={Network}
+          title={ACTION_SECTION_TITLES.analisis}
+          fields={[
+            { label: ACTION_FIELD_LABELS.identificacionCausas, value: action.identificacionCausas, wide: true },
+            { label: ACTION_FIELD_LABELS.causaRaiz, value: action.causaRaiz, wide: true },
+            { label: ACTION_FIELD_LABELS.accionContencion, value: action.accionContencion, wide: true },
+          ]}
+        />
+      ) : null}
 
       <PlanSection action={action} />
 
-      <FollowUpSection action={action} />
+      <FinalEvaluationSection action={action} />
 
       <section className="last-activity">
         <span>La Ultima Actividad que se realizo con el Registro fue</span>
@@ -206,20 +201,13 @@ function PlanSection({ action }: { action: CorrectiveAction }) {
     <section className="detail-card">
       <SectionHeading
         icon={ListChecks}
-        title="Plan de actividades"
-        subtitle="Actividades, responsables, ejecución, evidencias y validación."
+        title={ACTION_SECTION_TITLES.plan}
+        subtitle="Información diligenciada para cada actividad."
       />
       {containmentResponse ? (
         <div className="plan-control-row">
-          <div className="plan-control-row__head">
-            <div className="plan-control-row__type">
-              <span className="control-chip">Contención</span>
-            </div>
-          </div>
           <div className="plan-control-row__observation">
-            <span>Acción de contención</span>
-            <p>{action.accionContencion || 'Sin registrar'}</p>
-            <span>Respuesta REV</span>
+            <span>{ACTION_FIELD_LABELS.respuestaContencion}</span>
             <p>{containmentResponse}</p>
           </div>
         </div>
@@ -240,14 +228,16 @@ function PlanActivityReport({ actionId, activity, index }: { actionId: number; a
     <article className="plan-activity-report">
       <div className="plan-activity-report__head">
         <span className="plan-activity-report__number">{activityNumber}</span>
-        <span className="action-id">{activityCode}</span>
-        <strong>{activity.actividad || 'Sin registrar'}</strong>
+        <strong>Actividad {activityNumber}</strong>
       </div>
       <div className="plan-activity-report__meta">
-        <PlanMeta label="Inicio" value={formatDate(activity.fechaApertura)} />
-        <PlanMeta label="Fin" value={formatDate(activity.fechaCierre)} />
+        <PlanMeta label={ACTION_FIELD_LABELS.idActividad} value={activityCode} />
+        <PlanMeta label={ACTION_FIELD_LABELS.actividad} value={activity.actividad} multiline />
+        <PlanMeta label={ACTION_FIELD_LABELS.fechaApertura} value={formatDate(activity.fechaApertura)} />
+        <PlanMeta label={ACTION_FIELD_LABELS.fechaCierre} value={formatDate(activity.fechaCierre)} />
+        <PlanMeta label={ACTION_FIELD_LABELS.responsable} value={activity.responsable} />
         <div className="plan-meta">
-          <span>Evidencia</span>
+          <span>{ACTION_FIELD_LABELS.evidencia}</span>
           <EvidenceLink url={activity.evidencia} />
         </div>
       </div>
@@ -256,22 +246,26 @@ function PlanActivityReport({ actionId, activity, index }: { actionId: number; a
           chip={<span className="control-chip">Ejecución</span>}
           date={formatDate(activity.revisionFecha)}
           observation={activity.revisionObservacion}
-          responsible={activity.responsable}
+          dateLabel={ACTION_FIELD_LABELS.revisionFecha}
+          observationLabel={ACTION_FIELD_LABELS.revisionObservacion}
         />
         <PlanControlRow
-          chip={<span className="control-chip control-chip--validation">Val</span>}
+          chip={<span className="control-chip control-chip--validation">Validación</span>}
           date={formatDate(activity.validacionFecha)}
           observation={activity.validacionObservacion}
           responsible={activity.validacionResponsable}
+          responsibleLabel={ACTION_FIELD_LABELS.validacionResponsable}
+          dateLabel={ACTION_FIELD_LABELS.validacionFecha}
+          observationLabel={ACTION_FIELD_LABELS.validacionObservacion}
         />
       </div>
     </article>
   );
 }
 
-function PlanMeta({ label, value }: { label: string; value: string }) {
+function PlanMeta({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
   return (
-    <div className="plan-meta">
+    <div className={`plan-meta ${multiline ? 'plan-meta--multiline' : ''}`}>
       <span>{label}</span>
       <strong>{value || 'Sin registrar'}</strong>
     </div>
@@ -295,69 +289,52 @@ function PlanControlRow({
   responsible,
   date,
   observation,
+  responsibleLabel,
+  dateLabel,
+  observationLabel,
 }: {
   chip: ReactNode;
-  responsible: string;
+  responsible?: string;
   date: string;
   observation: string;
+  responsibleLabel?: string;
+  dateLabel: string;
+  observationLabel: string;
 }) {
   return (
     <div className="plan-control-row">
-      <div className="plan-control-row__head">
+      <div className={`plan-control-row__head ${responsibleLabel ? '' : 'plan-control-row__head--compact'}`}>
         <div className="plan-control-row__type">{chip}</div>
-        <div className="plan-control-row__person">
-          <span>Responsable</span>
-          <strong>{responsible || 'Sin registrar'}</strong>
-        </div>
+        {responsibleLabel ? (
+          <div className="plan-control-row__person">
+            <span>{responsibleLabel}</span>
+            <strong>{responsible || 'Sin registrar'}</strong>
+          </div>
+        ) : null}
         <div className="plan-control-row__date">
-          <span>Fecha</span>
+          <span>{dateLabel}</span>
           <strong>{date || 'Sin registrar'}</strong>
         </div>
       </div>
       <div className="plan-control-row__observation">
-        <span>Detalle</span>
+        <span>{observationLabel}</span>
         <p>{observation || 'Sin registrar'}</p>
       </div>
     </div>
   );
 }
 
-function FollowUpSection({ action }: { action: CorrectiveAction }) {
-  const items = [
-    {
-      label: 'Revisión',
-      person: action.revisionResponsable,
-      date: formatDate(action.revisionFecha),
-      text: action.revisionObservacion,
-    },
-    {
-      label: 'Validación',
-      person: action.validacionResponsable,
-      date: formatDate(action.validacionFecha),
-      text: action.validacionObservacion,
-    },
-    {
-      label: 'Evaluación de las Actividades',
-      person: action.auditorInterno,
-      date: formatDate(action.fechaEvaluacion),
-      text: action.evaluacionObservacion,
-    },
-  ];
-
+function FinalEvaluationSection({ action }: { action: CorrectiveAction }) {
   return (
-    <section className="detail-card">
-      <SectionHeading icon={ShieldCheck} title="Revisión, Validación y Evaluación de Actividades" />
-      <div className="follow-up-grid">
-        {items.map((item) => (
-          <article className="follow-up-card" key={item.label}>
-            <span>{item.label}</span>
-            <strong>{item.person || 'Sin responsable'}</strong>
-            <small>{item.date}</small>
-            <p>{item.text || 'Sin observación registrada.'}</p>
-          </article>
-        ))}
-      </div>
-    </section>
+    <DetailSection
+      icon={ShieldCheck}
+      title={getEvaluationSectionTitle(action.auditorInterno)}
+      fields={[
+        { label: ACTION_FIELD_LABELS.fechaEvaluacion, value: formatDate(action.fechaEvaluacion) },
+        { label: getEffectivenessLabel(action.auditorInterno), value: action.eficacia },
+        { label: ACTION_FIELD_LABELS.evaluacionObservacion, value: action.evaluacionObservacion, wide: true },
+      ]}
+    />
   );
 }
 

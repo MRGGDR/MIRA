@@ -17,18 +17,21 @@ import { Link } from 'react-router-dom';
 import { AccessContextBanner } from '@/components/common/AccessContextBanner';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
-import { getProcessName, getProcessNamesForAccess, isSameProcess } from '@/config/processes';
+import { getProcessName, isSameProcess } from '@/config/processes';
 import { actionQueries } from '@/features/actions/api/actionQueries';
 import type { ActionFilters, CorrectiveAction, CurrentUser, DocumentState } from '@/features/actions/types';
-import { getVisualStatus, isActionExpired } from '@/features/actions/utils/status';
+import { getVisualStatus } from '@/features/actions/utils/status';
 import {
   buildWorkflowRoleQueues,
   buildWorkflowTrafficLight,
+  canCreatorMaintainAction,
+  canRevMaintainAction,
   getWorkflowStage,
   isActionPendingForRole,
   WORKFLOW_STAGES,
 } from '@/features/actions/utils/workflow';
 import { useAuth } from '@/features/auth/AuthContext';
+import { filterActionsForUserScope, getUserProcessScope } from '@/features/auth/access';
 import { formatDate } from '@/utils/date';
 import { compactText, uniqueOptionSorted } from '@/utils/format';
 
@@ -63,8 +66,8 @@ function buildPageSummary(items: CorrectiveAction[]) {
   return {
     total: items.length,
     abiertas: items.filter((action) => getVisualStatus(action) === 'ABIERTA').length,
-    cerradas: items.filter((action) => action.estado === 'CERRADA').length,
-    vencidas: items.filter(isActionExpired).length,
+    cerradas: items.filter((action) => getVisualStatus(action) === 'CERRADA').length,
+    vencidas: items.filter((action) => getVisualStatus(action) === 'VENCIDA').length,
   };
 }
 
@@ -129,13 +132,9 @@ function canCreateReports(user: CurrentUser | null | undefined): boolean {
 function canManageAction(action: CorrectiveAction, user: CurrentUser | null | undefined): boolean {
   if (!user) return false;
   if (user.permissions.canAdmin) return true;
-  if (user.rol === 'CREADOR' && user.permissions.canUpdate && action.estado !== 'CERRADA' && action.estadoActual !== 'CERRADA') return true;
-  if (user.rol === 'REV' && user.permissions.canEditPlan && action.estadoActual !== 'CERRADA') return true;
+  if (user.rol === 'CREADOR' && user.permissions.canUpdate && canCreatorMaintainAction(action)) return true;
+  if (user.rol === 'REV' && user.permissions.canEditPlan && canRevMaintainAction(action)) return true;
   return isActionPendingForRole(action, user.rol);
-}
-
-function hasGlobalProcessScope(user: CurrentUser | null | undefined): boolean {
-  return Boolean(user?.permissions.canAdmin || user?.rol === 'OCI' || user?.rol === 'REV');
 }
 
 export function ActionsListPage() {
@@ -147,12 +146,15 @@ export function ActionsListPage() {
   const [stageFilter, setStageFilter] = useState<DocumentState | ''>(defaultStageForRole);
   const allActionsQuery = useQuery(actionQueries.all());
   const canCreate = canCreateReports(user);
-  const scopedProcess = hasGlobalProcessScope(user) ? '' : (getProcessNamesForAccess(user?.proceso ?? '')[0] ?? '');
+  const scopedProcess = getUserProcessScope(user)[0] ?? '';
   const effectiveProcessFilter = scopedProcess || filters.proceso || '';
   const effectiveDraftProcessFilter = scopedProcess || draftFilters.proceso || '';
 
   const activeFilters = countActiveFilters(filters, stageFilter, scopedProcess);
-  const sourceItems = useMemo(() => allActionsQuery.data ?? [], [allActionsQuery.data]);
+  const sourceItems = useMemo(
+    () => filterActionsForUserScope(allActionsQuery.data ?? [], user),
+    [allActionsQuery.data, user],
+  );
   const reportSummary = useMemo(() => buildPageSummary(sourceItems), [sourceItems]);
   const filterOptions = useMemo(() => buildFilterOptions(sourceItems), [sourceItems]);
   const filteredItems = useMemo(

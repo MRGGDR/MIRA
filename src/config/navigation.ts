@@ -11,6 +11,6 @@ export interface NavigationItem {
 export const navigationItems: NavigationItem[] = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
   { label: 'Reportar', path: '/acciones', icon: ClipboardPenLine },
-  { label: 'Historial', path: '/historial', icon: FileClock },
+  { label: 'Historial', path: '/historial', icon: FileClock, adminOnly: true },
   { label: 'Configuracion', path: '/configuracion', icon: Settings, adminOnly: true },
 ];

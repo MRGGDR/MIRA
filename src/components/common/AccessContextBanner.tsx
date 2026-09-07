@@ -2,6 +2,7 @@ import { Info, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import type { CurrentUser } from '@/features/actions/types';
 import { getProcessName } from '@/config/processes';
+import { hasGlobalProcessScope } from '@/features/auth/access';
 
 interface AccessContextBannerProps {
   user: CurrentUser | null;
@@ -11,19 +12,23 @@ interface AccessContextBannerProps {
 const roleCapabilities: Record<string, string[]> = {
   ADMIN: ['Ve todos los procesos.', 'Puede crear, editar y revisar cualquier fase.', 'Puede apoyar o corregir registros de otras areas.'],
   CREADOR: ['Puede reportar hallazgos.', 'Edita registro, analisis de causas y actividades base.', 'Consulta solo registros de su proceso.'],
-  REV: ['Gestiona acciones que llegan a revisión.', 'Diligencia ejecución y evidencia de las actividades.', 'Puede ver acciones en plan de acción de todos los procesos.'],
+  REV: ['Gestiona acciones que llegan a revisión.', 'Diligencia ejecución y evidencia de las actividades.', 'Consulta solo registros de su proceso.'],
   VAL: ['Gestiona acciones que llegan a validación.', 'Diligencia validación de las actividades.', 'Consulta solo registros de su proceso.'],
-  OCI: ['Gestiona acciones enviadas a OCI.', 'Evalúa la eficacia de la acción.', 'Consulta solo registros de su proceso.'],
+  OCI: ['Gestiona acciones enviadas a OCI.', 'Evalúa la eficacia de la acción.', 'Consulta acciones de todos los procesos.'],
   CONSULTA: ['Solo puede consultar información.', 'No puede crear ni editar reportes.', 'Consulta solo registros permitidos.'],
 };
 
 export function AccessContextBanner({ user, surface }: AccessContextBannerProps) {
   const [open, setOpen] = useState(false);
   const role = user?.rol ?? 'CONSULTA';
-  const isAdmin = Boolean(user?.permissions.canAdmin);
-  const hasGlobalProcessScope = Boolean(isAdmin || role === 'OCI' || role === 'REV');
-  const processCode = hasGlobalProcessScope ? 'Todos' : user?.proceso || 'Sin proceso';
-  const processLabel = hasGlobalProcessScope ? 'Todos los procesos' : `${processCode} - ${getProcessName(processCode)}`;
+  const globalProcessScope = hasGlobalProcessScope(user);
+  const processCode = globalProcessScope ? 'Todos' : user?.proceso || 'Sin proceso';
+  const processName = getProcessName(processCode);
+  const processLabel = globalProcessScope
+    ? 'Todos los procesos'
+    : processName && processName !== processCode
+      ? `${processCode} - ${processName}`
+      : processCode;
   const surfaceText = surface === 'dashboard' ? 'Dashboard' : 'Reportar';
 
   return (
@@ -38,11 +43,9 @@ export function AccessContextBanner({ user, surface }: AccessContextBannerProps)
             {surfaceText}: rol {role} · {processLabel}
           </strong>
           <small>
-            {role === 'REV'
-              ? 'Alcance global para acciones en plan de acción.'
-              : hasGlobalProcessScope
-                ? 'Alcance global de procesos.'
-                : 'Solo estás viendo información de tu proceso y permisos de rol.'}
+            {globalProcessScope
+              ? 'Alcance global de procesos.'
+              : 'Solo estás viendo información de tu proceso y permisos de rol.'}
           </small>
         </span>
         <span className="access-banner__action">
@@ -71,7 +74,7 @@ export function AccessContextBanner({ user, surface }: AccessContextBannerProps)
               <AccessFact label="Proceso" value={processLabel} />
               <AccessFact
                 label="Alcance"
-                value={role === 'REV' ? 'Acciones en plan de acción' : hasGlobalProcessScope ? 'Todos los registros' : 'Solo registros del proceso asignado'}
+                value={globalProcessScope ? 'Todos los registros' : 'Solo registros del proceso asignado'}
               />
             </div>
 
@@ -87,9 +90,7 @@ export function AccessContextBanner({ user, surface }: AccessContextBannerProps)
               <div>
                 <h4>Filtro aplicado</h4>
                 <p>
-                  {role === 'REV'
-                    ? 'Puedes ver acciones en plan de acción de todos los procesos. Las demás etapas siguen sujetas a los permisos del flujo.'
-                    : hasGlobalProcessScope
+                  {globalProcessScope
                     ? 'No se aplica restriccion por proceso. Puedes ver y filtrar todos los registros.'
                     : `El sistema restringe automaticamente Dashboard, Reportar, detalle y edicion al proceso ${processCode}.`}
                 </p>

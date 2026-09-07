@@ -52,6 +52,7 @@ function createAction_(input) {
     var action = normalizeActionInput_(input);
     applyUserProcessScope_(user, action);
     action.id = action.id ? validateId_(action.id) : calculateNextId_();
+    action = sanitizeCreatedActionForRole_(user, action);
     assertActionIdAvailable_(action.id);
     action.fechaElaboracion = action.fechaElaboracion || Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
     action.estadoActual = initialStateForCreatedAction_(action);
@@ -75,6 +76,7 @@ function assertActionIdAvailable_(id) {
 }
 
 function initialStateForCreatedAction_(action) {
+  if (normalizeEffectiveness_(action.eficacia)) return 'CERRADA';
   if (hasPlanActivity_(action)) return 'PLAN_ACCION';
   if (normalizeText_(action.tipoAccion).toLowerCase().indexOf('mejora') >= 0) return 'PLAN_ACCION';
   return 'ANALISIS';
@@ -93,24 +95,33 @@ function hasPlanActivity_(action) {
 function updateAction_(input) {
   var user = getCurrentUser_();
   assertPermission_(user, 'update');
-  var id = validateId_(input.id);
-  var record = findActionRecordById_(id);
-  if (!record) {
-    throw new AppError_('ACTION_NOT_FOUND', 'No se encontró la acción solicitada.', { id: id });
+  var lock = LockService.getScriptLock();
+  var locked = false;
+  try {
+    lock.waitLock(30000);
+    locked = true;
+    var id = validateId_(input.id);
+    var record = findActionRecordById_(id);
+    if (!record) {
+      throw new AppError_('ACTION_NOT_FOUND', 'No se encontró la acción solicitada.', { id: id });
+    }
+    assertActionScope_(user, record.action);
+    var action = normalizeActionInput_(input);
+    action.id = id;
+    assertActionPhasePermission_(user, record.action, action);
+    action = applyRoleUpdateRestrictions_(user, record.action, action);
+    applyUserProcessScope_(user, action);
+    assertBusinessRules_(action);
+    advanceActionStateOnSave_(user, record.action, action);
+    action.estadoActual = calculateDocumentState_(action);
+    action.estado = calculateStatus_(action);
+    validateAction_(action, { requireId: true });
+    var updated = updateActionRow_(record.rowNumber, action);
+    appendAudit_('UPDATE', user, id, record.rowNumber, record.action, updated.action);
+    return updated.action;
+  } finally {
+    if (locked) lock.releaseLock();
   }
-  assertActionScope_(user, record.action);
-  var action = normalizeActionInput_(input);
-  action.id = id;
-  applyUserProcessScope_(user, action);
-  assertActionPhasePermission_(user, record.action, action);
-  assertBusinessRules_(action);
-  advanceActionStateOnSave_(user, record.action, action);
-  action.estadoActual = calculateDocumentState_(action);
-  action.estado = calculateStatus_(action);
-  validateAction_(action, { requireId: true });
-  var updated = updateActionRow_(record.rowNumber, action);
-  appendAudit_('UPDATE', user, id, record.rowNumber, record.action, updated.action);
-  return updated.action;
 }
 
 function notifyOci_(id) {
@@ -119,27 +130,34 @@ function notifyOci_(id) {
   if (!user.permissions.canNotifyOci && !user.permissions.canAdmin) {
     throw new AppError_('FORBIDDEN', 'No tiene permisos para notificar a Control Interno.');
   }
-  var record = findActionRecordById_(id);
-  if (!record) throw new AppError_('ACTION_NOT_FOUND', 'No se encontró la acción solicitada.', { id: id });
-  assertActionScope_(user, record.action);
-  var action = record.action;
-  if (!isOciEvaluator_(action)) {
-    throw new AppError_('OCI_GATE_BLOCKED', 'Esta acción tiene como evaluador al líder del proceso; no debe enviarse a OCI.');
+  var lock = LockService.getScriptLock();
+  var locked = false;
+  try {
+    lock.waitLock(30000);
+    locked = true;
+    var record = findActionRecordById_(id);
+    if (!record) throw new AppError_('ACTION_NOT_FOUND', 'No se encontró la acción solicitada.', { id: id });
+    assertActionScope_(user, record.action);
+    var action = record.action;
+    if (!isOciEvaluator_(action)) {
+      throw new AppError_('OCI_GATE_BLOCKED', 'Esta acción tiene como evaluador al líder del proceso; no debe enviarse a OCI.');
+    }
+    if (!areActivitiesReadyForOci_(action)) {
+      throw new AppError_('OCI_GATE_BLOCKED', 'No puede notificar a Control Interno hasta completar revisión y validación de todas las actividades.');
+    }
+    action.correoEnviado = true;
+    action.estadoActual = 'REVISION_OCI';
+    action.estado = calculateStatus_(action);
+    var updated = updateActionRow_(record.rowNumber, action);
+    appendAudit_('UPDATE', user, id, record.rowNumber, record.action, updated.action);
+    return updated.action;
+  } finally {
+    if (locked) lock.releaseLock();
   }
-  if (!areActivitiesReadyForOci_(action)) {
-    throw new AppError_('OCI_GATE_BLOCKED', 'No puede notificar a Control Interno hasta completar revisión y validación de todas las actividades.');
-  }
-  action.correoEnviado = true;
-  action.estadoActual = 'REVISION_OCI';
-  action.estado = calculateStatus_(action);
-  var updated = updateActionRow_(record.rowNumber, action);
-  appendAudit_('UPDATE', user, id, record.rowNumber, record.action, updated.action);
-  return updated.action;
 }
 
 function isActionVisibleToUser_(user, action) {
   if (hasGlobalProcessScope_(user)) return true;
-  if (user.rol === 'REV' && normalizeDocumentState_(action.estadoActual) === 'PLAN_ACCION') return true;
   var proceso = normalizeText_(user.proceso).toUpperCase();
   if (!proceso) return false;
   var legacyProcesses = CONFIG.LEGACY_PROCESS_NAMES[proceso];
@@ -166,11 +184,17 @@ function applyUserProcessScope_(user, action) {
     throw new AppError_('FORBIDDEN', 'El usuario no tiene proceso asignado.', { email: user.email });
   }
   var processNames = getProcessNamesForAccess_(user.proceso);
-  action.proceso = processNames[0] || normalizeText_(user.proceso);
+  var requestedProcess = normalizeText_(action.proceso);
+  var requestedProcessIsAllowed = requestedProcess && processNames.some(function (processName) {
+    return isSameProcess_(requestedProcess, processName);
+  });
+  action.proceso = requestedProcessIsAllowed
+    ? getProcessName_(requestedProcess)
+    : (processNames[0] || normalizeText_(user.proceso));
 }
 
 function hasGlobalProcessScope_(user) {
-  return Boolean(user && user.permissions && (user.permissions.canAdmin || user.rol === 'OCI' || user.rol === 'REV'));
+  return Boolean(user && user.permissions && (user.permissions.canAdmin || user.rol === 'OCI'));
 }
 
 function assertBusinessRules_(action) {
@@ -208,17 +232,197 @@ function advanceActionStateOnSave_(user, previous, action) {
 function assertActionPhasePermission_(user, previous, next) {
   if (user.permissions.canAdmin) return;
   var phase = normalizeDocumentState_(previous.estadoActual || next.estadoActual);
+  var role = normalizeText_(user.rol).toUpperCase();
+  var previousActivities = normalizeJsonField_(previous.planMejoramiento);
+  if (
+    role === 'CREADOR' &&
+    ['REGISTRO', 'ANALISIS'].indexOf(phase) < 0 &&
+    hasActivityOperationalProgress_(previousActivities)
+  ) {
+    throw new AppError_('FORBIDDEN', 'El plan ya tiene avances de revisiÃ³n o validaciÃ³n y no puede ser modificado por CREADOR.');
+  }
+  if (
+    role === 'REV' &&
+    !previousActivities.some(function (activity) { return !hasActivityValidationProgress_(activity); })
+  ) {
+    throw new AppError_('FORBIDDEN', 'No hay actividades disponibles para ediciÃ³n REV.');
+  }
+  if (role === 'OCI' && !isOciEvaluator_(previous)) {
+    throw new AppError_('FORBIDDEN', 'La evaluaciÃ³n final de esta acciÃ³n corresponde al lÃ­der del proceso.');
+  }
   var allowed =
     (phase === 'REGISTRO' && user.permissions.canEditRegistro) ||
     (phase === 'ANALISIS' && user.permissions.canEditAnalisis) ||
     (phase === 'PLAN_ACCION' && user.permissions.canEditPlan) ||
     (phase === 'VALIDACION' && user.permissions.canEditValidacion) ||
     (phase === 'REVISION_OCI' && user.permissions.canEditOci) ||
-    (phase !== 'CERRADA' && user.permissions.canEditPlan) ||
+    (['PLAN_ACCION', 'VALIDACION', 'REVISION_OCI'].indexOf(phase) >= 0 && user.permissions.canEditPlan) ||
     (phase !== 'CERRADA' && user.rol === 'CREADOR' && user.permissions.canUpdate);
   if (!allowed) {
     throw new AppError_('FORBIDDEN', 'No puede editar esta fase del documento.', { estadoActual: phase, rol: user.rol });
   }
+}
+
+/**
+ * Applies field-level authorization on the server. The form sends the complete
+ * action on every save, so disabled controls cannot be trusted as an access
+ * boundary. Only fields owned by the current role are accepted from the request.
+ */
+function applyRoleUpdateRestrictions_(user, previousAction, requestedAction) {
+  var role = normalizeText_(user && user.rol).toUpperCase();
+  if (role === 'ADMIN') return requestedAction;
+
+  var result = cloneAction_(previousAction);
+  var previousActivities = Array.isArray(previousAction.planMejoramiento)
+    ? previousAction.planMejoramiento
+    : [];
+  var requestedActivities = Array.isArray(requestedAction.planMejoramiento)
+    ? requestedAction.planMejoramiento
+    : [];
+
+  if (role === 'CREADOR') {
+    var phase = normalizeDocumentState_(previousAction.estadoActual);
+    if (phase === 'REGISTRO') {
+      copyActionFields_(result, requestedAction, [
+        'fechaElaboracion',
+        'origen',
+        'tipoAccion',
+        'proceso',
+        'identificadoPor',
+        'liderProceso',
+        'descripcion',
+        'auditorInterno'
+      ]);
+    }
+    if (phase === 'ANALISIS') {
+      copyActionFields_(result, requestedAction, [
+        'identificacionCausas',
+        'causaRaiz',
+        'accionContencion'
+      ]);
+    }
+    if (
+      phase !== 'CERRADA' &&
+      !hasActivityOperationalProgress_(previousActivities)
+    ) {
+      result.planMejoramiento = requestedActivities.map(function (activity, index) {
+        return sanitizeActivityDefinition_(activity, result, index);
+      });
+    }
+  } else if (role === 'REV') {
+    result.planMejoramiento = previousActivities.map(function (activity, index) {
+      var merged = cloneAction_(activity);
+      var requested = findRequestedActivity_(requestedActivities, activity, index);
+      if (!requested || hasActivityValidationProgress_(activity)) return merged;
+      copyActionFields_(merged, requested, ['evidencia', 'revisionFecha', 'revisionObservacion']);
+      if (index === 0) merged.observacionRevision = requested.observacionRevision;
+      merged.revisionResponsable = normalizeText_(activity.responsable);
+      return merged;
+    });
+  } else if (role === 'VAL') {
+    result.planMejoramiento = previousActivities.map(function (activity, index) {
+      var merged = cloneAction_(activity);
+      var requested = findRequestedActivity_(requestedActivities, activity, index);
+      if (!requested || !isActivityReviewedForAuthorization_(activity)) return merged;
+      copyActionFields_(merged, requested, ['validacionFecha', 'validacionObservacion']);
+      merged.validacionResponsable = normalizeText_(result.liderProceso);
+      return merged;
+    });
+    if (isProcessLeaderEvaluator_(result) && areActivitiesReadyForOci_(result)) {
+      copyActionFields_(result, requestedAction, ['fechaEvaluacion', 'eficacia', 'evaluacionObservacion']);
+    }
+  } else if (role === 'OCI' && isOciEvaluator_(result)) {
+    copyActionFields_(result, requestedAction, ['fechaEvaluacion', 'eficacia', 'evaluacionObservacion']);
+  }
+
+  syncFirstActivityFields_(result);
+  return result;
+}
+
+function sanitizeCreatedActionForRole_(user, action) {
+  var role = normalizeText_(user && user.rol).toUpperCase();
+  if (role === 'ADMIN') return action;
+
+  action.fechaEvaluacion = '';
+  action.eficacia = '';
+  action.evaluacionObservacion = '';
+  action.correoEnviado = false;
+  action.fechasBloqueadas = false;
+  action.planMejoramiento = (action.planMejoramiento || []).map(function (activity, index) {
+    return sanitizeActivityDefinition_(activity, action, index);
+  });
+  syncFirstActivityFields_(action);
+  return action;
+}
+
+function sanitizeActivityDefinition_(activity, action, index) {
+  var number = index + 1;
+  return {
+    idActividad: String(action.id) + '-' + ('000' + number).slice(-3),
+    idAccion: Number(action.id),
+    numeroActividad: number,
+    actividad: normalizeMultilineText_(activity && activity.actividad),
+    fechaApertura: normalizeText_(activity && activity.fechaApertura),
+    fechaCierre: normalizeText_(activity && activity.fechaCierre),
+    presupuesto: Number((activity && activity.presupuesto) || 0),
+    responsable: normalizeText_(activity && activity.responsable),
+    evidencia: '',
+    revisionResponsable: normalizeText_(activity && activity.responsable),
+    revisionFecha: '',
+    revisionObservacion: '',
+    validacionResponsable: normalizeText_(action.liderProceso),
+    validacionFecha: '',
+    validacionObservacion: '',
+    observacionRevision: ''
+  };
+}
+
+function hasActivityOperationalProgress_(activities) {
+  return (activities || []).some(function (activity) {
+    return Boolean(
+      normalizeText_(activity && activity.evidencia) ||
+      normalizeText_(activity && activity.revisionFecha) ||
+      normalizeMultilineText_(activity && activity.revisionObservacion) ||
+      normalizeMultilineText_(activity && activity.observacionRevision) ||
+      normalizeText_(activity && activity.validacionFecha) ||
+      normalizeMultilineText_(activity && activity.validacionObservacion)
+    );
+  });
+}
+
+function isActivityReviewedForAuthorization_(activity) {
+  return Boolean(
+    normalizeText_(activity && activity.revisionFecha) &&
+    normalizeMultilineText_(activity && activity.revisionObservacion)
+  );
+}
+
+function hasActivityValidationProgress_(activity) {
+  return Boolean(
+    normalizeText_(activity && activity.validacionFecha) ||
+    normalizeMultilineText_(activity && activity.validacionObservacion)
+  );
+}
+
+function findRequestedActivity_(requestedActivities, previousActivity, index) {
+  var activityId = normalizeText_(previousActivity && previousActivity.idActividad);
+  if (activityId) {
+    var byId = (requestedActivities || []).filter(function (activity) {
+      return normalizeText_(activity && activity.idActividad) === activityId;
+    })[0];
+    if (byId) return byId;
+  }
+  return requestedActivities && requestedActivities[index];
+}
+
+function copyActionFields_(target, source, fields) {
+  fields.forEach(function (field) {
+    target[field] = source[field];
+  });
+}
+
+function cloneAction_(value) {
+  return JSON.parse(JSON.stringify(value || {}));
 }
 
 function matchesActionFilters_(action, filters) {
@@ -228,9 +432,7 @@ function matchesActionFilters_(action, filters) {
   if (filters.origen && normalizeText_(action.origen) !== normalizeText_(filters.origen)) return false;
   if (filters.estado) {
     var requestedStatus = normalizeText_(filters.estado);
-    if (requestedStatus === 'VENCIDA' && !isActionExpired_(action)) return false;
-    if (requestedStatus === 'ABIERTA' && (normalizeText_(action.estado) !== 'ABIERTA' || isActionExpired_(action))) return false;
-    if (requestedStatus === 'CERRADA' && normalizeText_(action.estado) !== 'CERRADA') return false;
+    if (calculateStatus_(action) !== requestedStatus) return false;
   }
   if (filters.eficacia) {
     var requestedEffectiveness = normalizeText_(filters.eficacia);

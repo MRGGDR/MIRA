@@ -17,6 +17,19 @@ describe('actionSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('preserves bullets, numbering and line breaks in structured text fields', () => {
+    const structuredText = '• Primera causa\n• Segunda causa\n\n1. Acción inicial\n2. Acción final';
+    const result = actionSchema.parse({
+      ...getDefaultActionValues('GG'),
+      origen: 'Auditoria interna',
+      tipoAccion: 'Accion correctiva',
+      descripcion: structuredText,
+      auditorInterno: 'OCI',
+    });
+
+    expect(result.descripcion).toBe(structuredText);
+  });
+
   it('rejects negative budgets and invalid date order', () => {
     const result = actionSchema.safeParse({
       ...getDefaultActionValues('GG'),

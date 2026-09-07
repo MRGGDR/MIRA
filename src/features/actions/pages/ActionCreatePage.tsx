@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -21,7 +21,6 @@ export function ActionCreatePage() {
   const [searchParams] = useSearchParams();
   const [saveError, setSaveError] = useState<unknown>(null);
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const parametersQuery = useParameters();
   const nextActionIdQuery = useQuery(actionQueries.nextActionId());
   const createAction = useCreateAction();
@@ -37,7 +36,6 @@ export function ActionCreatePage() {
     show('Guardando acción...');
     try {
       const action = await createAction.mutateAsync(values);
-      await queryClient.invalidateQueries({ queryKey: ['actions', action.id] });
       void navigate(`/acciones/${action.id}`, {
         state: {
           feedback: {
@@ -75,7 +73,7 @@ export function ActionCreatePage() {
         parameters={parametersQuery.data}
         currentUser={user}
         isSaving={createAction.isPending}
-        onSubmit={(values) => void submit(values)}
+        onSubmit={submit}
       />
     </div>
   );

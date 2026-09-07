@@ -8,6 +8,7 @@ import {
   Clock,
   Database,
   FilePlus2,
+  ListChecks,
   Search,
   SlidersHorizontal,
   Target,
@@ -35,12 +36,13 @@ import { AccessContextBanner } from '@/components/common/AccessContextBanner';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
-import { getProcessName, getProcessNamesForAccess, isSameProcess, PROCESSES } from '@/config/processes';
+import { getProcessName, isSameProcess, PROCESSES } from '@/config/processes';
 import { actionQueries } from '@/features/actions/api/actionQueries';
 import type { CorrectiveAction } from '@/features/actions/types';
-import { getVisualStatus, isActionExpired } from '@/features/actions/utils/status';
+import { getVisualStatus } from '@/features/actions/utils/status';
 import { buildWorkflowRoleQueues, buildWorkflowTrafficLight, isActionPendingForRole } from '@/features/actions/utils/workflow';
 import { useAuth } from '@/features/auth/AuthContext';
+import { filterActionsForUserScope, getUserProcessScope } from '@/features/auth/access';
 import { compactText, uniqueOptionSorted } from '@/utils/format';
 
 const DEFAULT_ORIGIN_OPTIONS = ['Auditoria externa', 'Auditoria interna', 'Entes de control', 'Indicadores', 'PQRS', 'Otro'];
@@ -149,9 +151,10 @@ function buildDashboardStats(actions: CorrectiveAction[]) {
 
   return {
     total: actions.length,
+    actividades: actions.reduce((total, action) => total + (action.planMejoramiento?.length ?? 0), 0),
     abiertas: actions.filter((action) => getVisualStatus(action) === 'ABIERTA').length,
-    cerradas: actions.filter((action) => action.estado === 'CERRADA').length,
-    vencidas: actions.filter(isActionExpired).length,
+    cerradas: actions.filter((action) => getVisualStatus(action) === 'CERRADA').length,
+    vencidas: actions.filter((action) => getVisualStatus(action) === 'VENCIDA').length,
     eficaces: actions.filter((action) => action.eficacia === 'SI').length,
     noEficaces: actions.filter((action) => action.eficacia === 'NO').length,
     porProceso: Array.from(processTotals, ([proceso, total]) => ({ proceso, total })).sort((a, b) =>
@@ -170,12 +173,15 @@ export function DashboardPage() {
   const actionsQuery = useQuery(actionQueries.all());
   const parametersQuery = useQuery(actionQueries.parameters());
   const { user } = useAuth();
-  const hasGlobalProcessScope = Boolean(user?.permissions.canAdmin || user?.rol === 'OCI' || user?.rol === 'REV');
-  const scopedProcess = hasGlobalProcessScope ? '' : (getProcessNamesForAccess(user?.proceso ?? '')[0] ?? '');
+  const canCreateReport = Boolean(user?.permissions.canAdmin || (user?.rol === 'CREADOR' && user.permissions.canCreate));
+  const scopedProcess = getUserProcessScope(user)[0] ?? '';
   const effectiveProcessFilter = scopedProcess || filterProceso;
   const hasFilters = Boolean(filterOrigen || filterEstado || filterEficacia || (!scopedProcess && filterProceso));
 
-  const allActions = useMemo(() => actionsQuery.data ?? [], [actionsQuery.data]);
+  const allActions = useMemo(
+    () => filterActionsForUserScope(actionsQuery.data ?? [], user),
+    [actionsQuery.data, user],
+  );
   const filteredActions = useMemo(
     () =>
       filterDashboardActions(allActions, {
@@ -187,11 +193,11 @@ export function DashboardPage() {
     [allActions, effectiveProcessFilter, filterEficacia, filterEstado, filterOrigen],
   );
   const stats = useMemo(() => buildDashboardStats(filteredActions), [filteredActions]);
-  const roleQueues = useMemo(() => buildWorkflowRoleQueues(allActions), [allActions]);
-  const trafficLight = useMemo(() => buildWorkflowTrafficLight(allActions, user?.rol), [allActions, user?.rol]);
+  const roleQueues = useMemo(() => buildWorkflowRoleQueues(filteredActions), [filteredActions]);
+  const trafficLight = useMemo(() => buildWorkflowTrafficLight(filteredActions, user?.rol), [filteredActions, user?.rol]);
   const myPendingCount = useMemo(
-    () => allActions.filter((action) => isActionPendingForRole(action, user?.rol)).length,
-    [allActions, user?.rol],
+    () => filteredActions.filter((action) => isActionPendingForRole(action, user?.rol)).length,
+    [filteredActions, user?.rol],
   );
 
   if (actionsQuery.isLoading) return <DashboardSkeleton />;
@@ -266,19 +272,23 @@ export function DashboardPage() {
         description="Mejoramiento Institucional, Registro y Avance. Seguimiento de acciones correctivas y de mejora - UNGRD."
         actions={
           <>
-            <a
-              className="button button--secondary"
-              href={DATABASE_SPREADSHEET_URL}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <Database aria-hidden size={16} />
-              Base de datos
-            </a>
-            <Link className="button button--primary" to="/acciones/nueva">
-              <FilePlus2 aria-hidden size={16} />
-              Reportar acción
-            </Link>
+            {user?.permissions.canAdmin ? (
+              <a
+                className="button button--secondary"
+                href={DATABASE_SPREADSHEET_URL}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <Database aria-hidden size={16} />
+                Base de datos
+              </a>
+            ) : null}
+            {canCreateReport ? (
+              <Link className="button button--primary" to="/acciones/nueva">
+                <FilePlus2 aria-hidden size={16} />
+                Reportar acción
+              </Link>
+            ) : null}
             <Link className="button button--secondary" to="/acciones">
               <Search aria-hidden size={16} />
               Reportar
@@ -432,6 +442,13 @@ export function DashboardPage() {
           <TrendingUp aria-hidden size={16} />
           <span>
             Tasa de cierre: <strong>{closureRate}%</strong>
+          </span>
+        </div>
+        <div className="summary-divider" />
+        <div className="summary-item">
+          <ListChecks aria-hidden size={16} />
+          <span>
+            Actividades: <strong>{stats.actividades}</strong>
           </span>
         </div>
         <div className="summary-divider" />

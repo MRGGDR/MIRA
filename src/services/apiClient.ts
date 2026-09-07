@@ -16,7 +16,7 @@ import type {
   UpdateActionInput,
   UpdateUserInput,
 } from '@/features/actions/types';
-import { isActionExpired } from '@/features/actions/utils/status';
+import { getVisualStatus } from '@/features/actions/utils/status';
 
 export class ApiClientError extends Error {
   constructor(
@@ -42,6 +42,7 @@ interface RequestPayload {
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const LOGIN_TIMEOUT_MS = 90000;
+const WRITE_TIMEOUT_MS = 90000;
 const AUTH_TOKEN_KEY = 'neogestion.authToken';
 const NEXT_ACTION_ID_BASE = 411;
 
@@ -195,16 +196,16 @@ export const apiClient = {
   me: () => request<CurrentUser>({ action: 'me' }, true),
   bootstrap: () => request<{ parameters: Parameters; currentUser: CurrentUser; stats: DashboardStats }>({ action: 'bootstrap' }, true),
   listUsers: () => request<ManagedUser[]>({ action: 'listUsers' }, true),
-  createUser: (data: CreateUserInput) => request<ManagedUser>({ action: 'createUser', data }),
-  updateUser: (data: UpdateUserInput) => request<ManagedUser>({ action: 'updateUser', data }),
+  createUser: (data: CreateUserInput) => request<ManagedUser>({ action: 'createUser', data }, false, WRITE_TIMEOUT_MS),
+  updateUser: (data: UpdateUserInput) => request<ManagedUser>({ action: 'updateUser', data }, false, WRITE_TIMEOUT_MS),
   getParameters: () => request<Parameters>({ action: 'getParameters' }, true),
   getNextActionId,
   listActions: (filters: ActionFilters) => request<ActionListResponse>({ action: 'listActions', params: { filters } }, true),
   listAllActions,
   getAction: (id: number) => request<CorrectiveAction>({ action: 'getAction', params: { id } }, true),
-  createAction: (data: CreateActionInput) => request<CorrectiveAction>({ action: 'createAction', data }),
-  updateAction: (data: UpdateActionInput) => request<CorrectiveAction>({ action: 'updateAction', data }),
-  notifyOci: (id: number) => request<CorrectiveAction>({ action: 'notifyOci', params: { id } }),
+  createAction: (data: CreateActionInput) => request<CorrectiveAction>({ action: 'createAction', data }, false, WRITE_TIMEOUT_MS),
+  updateAction: (data: UpdateActionInput) => request<CorrectiveAction>({ action: 'updateAction', data }, false, WRITE_TIMEOUT_MS),
+  notifyOci: (id: number) => request<CorrectiveAction>({ action: 'notifyOci', params: { id } }, false, WRITE_TIMEOUT_MS),
   getStats: () => request<DashboardStats>({ action: 'getStats' }, true),
   getAudit: (actionId?: number) => request<AuditRecord[]>({ action: 'getAudit', params: { actionId } }, true),
 };
@@ -352,7 +353,7 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
       const user: ManagedUser = {
         email: data.email.trim(),
         nombre: data.nombre.trim(),
-        proceso: data.proceso.trim(),
+        proceso: data.rol === 'ADMIN' || data.rol === 'OCI' ? '' : data.proceso.trim(),
         rol: data.rol,
         activo: data.activo,
       };
@@ -366,7 +367,7 @@ async function mockRequest<TData>(payload: RequestPayload): Promise<TData> {
       const updated: ManagedUser = {
         email: mockUsers[index].email,
         nombre: data.nombre.trim(),
-        proceso: data.rol === 'ADMIN' ? '' : data.proceso.trim(),
+        proceso: data.rol === 'ADMIN' || data.rol === 'OCI' ? '' : data.proceso.trim(),
         rol: data.rol,
         activo: data.activo,
       };
@@ -462,9 +463,7 @@ function filterActions(actions: CorrectiveAction[], filters: ActionFilters): Cor
   return actions.filter((action) => {
     if (filters.id && action.id !== Number(filters.id)) return false;
     if (filters.proceso && !isSameProcess(action.proceso, filters.proceso)) return false;
-    if (filters.estado === 'VENCIDA' && !isActionExpired(action)) return false;
-    if (filters.estado === 'ABIERTA' && (action.estado !== 'ABIERTA' || isActionExpired(action))) return false;
-    if (filters.estado === 'CERRADA' && action.estado !== 'CERRADA') return false;
+    if (filters.estado && getVisualStatus(action) !== filters.estado) return false;
     if (filters.eficacia === 'SIN_EVALUAR' && action.eficacia) return false;
     if (filters.eficacia && filters.eficacia !== 'SIN_EVALUAR' && action.eficacia !== filters.eficacia) return false;
     if (filters.responsable && action.responsable !== filters.responsable) return false;
@@ -477,13 +476,14 @@ function filterActions(actions: CorrectiveAction[], filters: ActionFilters): Cor
 }
 
 function getCreatedMockStage(data: CreateActionInput): CorrectiveAction['estadoActual'] {
+  if (data.eficacia) return 'CERRADA';
   if (hasMockPlanActivity(data)) return 'PLAN_ACCION';
   if ((data.tipoAccion ?? '').toLowerCase().includes('mejora')) return 'PLAN_ACCION';
   return 'ANALISIS';
 }
 
 function getUpdatedMockStage(data: UpdateActionInput): CorrectiveAction['estadoActual'] {
-  if (data.eficacia === 'SI') return 'CERRADA';
+  if (data.eficacia) return 'CERRADA';
   if (areMockActivitiesReadyForOci(data)) return data.auditorInterno.trim().toLowerCase() === 'oci' ? 'REVISION_OCI' : 'VALIDACION';
   if (data.estadoActual === 'REVISION_OCI' && areMockActivitiesExecuted(data)) return 'VALIDACION';
   if (data.estadoActual === 'REVISION_OCI') return 'PLAN_ACCION';
@@ -524,12 +524,13 @@ function areMockActivitiesReadyForOci(data: CreateActionInput) {
 }
 
 function buildMockStats(): DashboardStats {
-  const vencidas = mockActions.filter(isActionExpired).length;
+  const visualStatuses = mockActions.map(getVisualStatus);
   return {
     total: mockActions.length,
-    abiertas: mockActions.filter((action) => action.estado === 'ABIERTA').length,
-    cerradas: mockActions.filter((action) => action.estado === 'CERRADA').length,
-    vencidas,
+    actividades: mockActions.reduce((total, action) => total + (action.planMejoramiento?.length ?? 0), 0),
+    abiertas: visualStatuses.filter((status) => status === 'ABIERTA').length,
+    cerradas: visualStatuses.filter((status) => status === 'CERRADA').length,
+    vencidas: visualStatuses.filter((status) => status === 'VENCIDA').length,
     eficaces: mockActions.filter((action) => action.eficacia === 'SI').length,
     noEficaces: mockActions.filter((action) => action.eficacia === 'NO').length,
     porProceso: PROCESSES.map((process) => ({

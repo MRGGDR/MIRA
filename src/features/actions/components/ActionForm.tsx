@@ -1,12 +1,31 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown, ExternalLink, Eye, Lock, PencilLine, Plus, Save, Trash2, X, type LucideIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useFieldArray, useForm, useWatch, type FieldErrors, type FieldPath, type SubmitHandler, type UseFormRegister } from 'react-hook-form';
+import { ChevronDown, ExternalLink, Eye, List, ListOrdered, Lock, PencilLine, Plus, Save, Trash2, X, type LucideIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useController,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+  type FieldErrors,
+  type FieldPath,
+  type SubmitHandler,
+  type UseFormRegister,
+} from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { FeedbackMessage } from '@/components/feedback/FeedbackMessage';
-import { getDriveLinkForProcess, getProcessNamesForAccess, PROCESSES } from '@/config/processes';
+import { getDriveLinkForProcess, PROCESSES } from '@/config/processes';
+import {
+  ACTION_FIELD_LABELS,
+  ACTION_SECTION_TITLES,
+  getEffectivenessLabel,
+  getEvaluatorLabel,
+  getEvaluationSectionTitle,
+} from '@/features/actions/config/actionPresentation';
 import { actionSchema, type ActionFormValues } from '@/features/actions/schemas/actionSchema';
 import type { CurrentUser, Parameters } from '@/features/actions/types';
+import { applyListFormat, type ListStyle } from '@/features/actions/utils/structuredText';
+import { getUserProcessScope, hasGlobalProcessScope } from '@/features/auth/access';
 import { todayIso } from '@/utils/date';
 import { uniqueOptionSorted } from '@/utils/format';
 
@@ -16,7 +35,7 @@ interface ActionFormProps {
   parameters?: Parameters;
   currentUser?: CurrentUser | null;
   isSaving: boolean;
-  onSubmit: (values: ActionFormValues) => void;
+  onSubmit: (values: ActionFormValues) => Promise<void> | void;
 }
 
 type DynamicSectionName = 'equipoMejoramientoDetalle' | 'causasDefinitivas' | 'planMejoramiento';
@@ -38,11 +57,12 @@ interface FieldConfig {
 
 export function ActionForm({ mode, initialValues, parameters, currentUser, isSaving, onSubmit }: ActionFormProps) {
   const navigate = useNavigate();
+  const submissionInFlight = useRef(false);
   const {
     register,
     handleSubmit,
     control,
-    formState: { errors, isDirty },
+    formState: { errors, isDirty, isSubmitting },
     reset,
     setFocus,
     setValue,
@@ -68,8 +88,8 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   }, [isDirty]);
 
   const isAdmin = Boolean(currentUser?.permissions.canAdmin);
-  const hasGlobalProcessScope = Boolean(isAdmin || currentUser?.rol === 'OCI' || currentUser?.rol === 'REV');
-  const scopedProcesses = hasGlobalProcessScope ? [] : getProcessNamesForAccess(currentUser?.proceso ?? '');
+  const globalProcessScope = hasGlobalProcessScope(currentUser);
+  const scopedProcesses = getUserProcessScope(currentUser);
   const originOptions = uniqueOptionSorted(parameters?.origenes ?? []);
   const selectedType = useWatch({ control, name: 'tipoAccion' }) ?? '';
   const selectedActionId = useWatch({ control, name: 'id' }) ?? initialValues.id;
@@ -81,7 +101,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
   const isImprovement = normalizedType.includes('mejora');
   const isCorrective = normalizedType.includes('correctiva');
   const typeOptions = (parameters?.tiposAccion ?? []).filter((option) => !option.toLowerCase().includes('preventiva'));
-  const processOptions = scopedProcesses.length ? scopedProcesses : PROCESSES.map((item) => item.name);
+  const processOptions = globalProcessScope ? PROCESSES.map((item) => item.name) : scopedProcesses;
   const driveUrl = getDriveLinkForProcess(selectedProcess);
   const selectedProcessLeader = useWatch({ control, name: 'liderProceso' }) ?? initialValues.liderProceso ?? '';
   const evaluatorOptions = isCorrective
@@ -96,6 +116,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     isCreator &&
     ((mode === 'create' && Boolean(currentUser?.permissions.canCreate)) ||
       (mode === 'edit' && currentState !== 'CERRADA' && initialValues.estado !== 'CERRADA' && Boolean(currentUser?.permissions.canUpdate)));
+  const planHasOperationalProgress = initialValues.planMejoramiento.some(hasActivityOperationalProgress);
 
   const canEditPhase = (phase: FormPhase) => {
     if (isAdmin) return true;
@@ -118,9 +139,12 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         (phase === 'oci' && (finalEvaluatorRole === 'VAL' ? permissions?.canEditValidacion : permissions?.canEditOci)),
     );
   };
-  const canEditPlanDefinition = isAdmin || canCreatorMaintainActivities;
+  const canEditPlanDefinition = isAdmin || (canCreatorMaintainActivities && !planHasOperationalProgress);
   const canEditPlanExecution =
-    isAdmin || (mode === 'edit' && currentState !== 'CERRADA' && Boolean(currentUser?.permissions.canEditPlan));
+    isAdmin ||
+    (mode === 'edit' &&
+      ['PLAN_ACCION', 'VALIDACION', 'REVISION_OCI'].includes(currentState) &&
+      Boolean(currentUser?.permissions.canEditPlan));
   const canEditPlanValidation =
     isAdmin || (mode === 'edit' && currentState === 'VALIDACION' && Boolean(currentUser?.permissions.canEditValidacion));
   const canEditActivityDefinition = canEditPlanDefinition;
@@ -132,7 +156,6 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     isAdmin || (mode === 'edit' && ['VALIDACION', 'REVISION_OCI', 'CERRADA'].includes(currentState));
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [validationMessage, setValidationMessage] = useState('');
-  const [pendingSubmitValues, setPendingSubmitValues] = useState<ActionFormValues | null>(null);
   const today = useMemo(() => todayIso(), []);
 
   useEffect(() => {
@@ -207,47 +230,47 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
 
   const sections: Array<{ title: string; phase: FormPhase; hidden?: boolean; fields: FieldConfig[] }> = [
     {
-      title: 'A. Descripción del hallazgo',
+      title: ACTION_SECTION_TITLES.registro,
       phase: 'registro',
       fields: [
-        { name: 'id', label: 'Número de la acción', type: 'number', readOnly: mode === 'create' },
-        { name: 'fechaElaboracion', label: 'Fecha de elaboración', type: 'date', required: true },
-        { name: 'origen', label: 'Origen', type: 'select', options: originOptions, required: true },
-        { name: 'tipoAccion', label: 'Tipo de acción', type: 'select', options: typeOptions, required: true },
-        { name: 'proceso', label: 'Proceso o subproceso', type: 'select', options: processOptions, required: true },
-        { name: 'identificadoPor', label: 'Registrado por', type: 'text' },
-        { name: 'liderProceso', label: 'Líder del proceso', type: 'text' },
+        { name: 'id', label: ACTION_FIELD_LABELS.id, type: 'number', readOnly: mode === 'create' },
+        { name: 'fechaElaboracion', label: ACTION_FIELD_LABELS.fechaElaboracion, type: 'date', required: true },
+        { name: 'origen', label: ACTION_FIELD_LABELS.origen, type: 'select', options: originOptions, required: true },
+        { name: 'tipoAccion', label: ACTION_FIELD_LABELS.tipoAccion, type: 'select', options: typeOptions, required: true },
+        { name: 'proceso', label: ACTION_FIELD_LABELS.proceso, type: 'select', options: processOptions, required: true },
+        { name: 'identificadoPor', label: ACTION_FIELD_LABELS.identificadoPor, type: 'text' },
+        { name: 'liderProceso', label: ACTION_FIELD_LABELS.liderProceso, type: 'text' },
         {
           name: 'auditorInterno',
-          label: 'Evaluador',
+          label: ACTION_FIELD_LABELS.auditorInterno,
           type: 'select',
           options: evaluatorOptions,
           placeholder: isImprovement ? 'Seleccione evaluador...' : undefined,
           hidden: !(isCorrective || isImprovement),
           required: true,
         },
-        { name: 'descripcion', label: 'Descripción', type: 'textarea', full: true, required: true },
+        { name: 'descripcion', label: ACTION_FIELD_LABELS.descripcion, type: 'textarea', full: true, required: true },
       ],
     },
     {
-      title: 'B. Análisis de causas',
+      title: ACTION_SECTION_TITLES.analisis,
       phase: 'analisis',
       hidden: isImprovement,
       fields: [
-        { name: 'identificacionCausas', label: 'Identificación de causas', type: 'textarea', full: true },
-        { name: 'causaRaiz', label: 'Causa raíz', type: 'textarea', full: true },
-        { name: 'accionContencion', label: 'Acción de contención', type: 'textarea', full: true },
+        { name: 'identificacionCausas', label: ACTION_FIELD_LABELS.identificacionCausas, type: 'textarea', full: true },
+        { name: 'causaRaiz', label: ACTION_FIELD_LABELS.causaRaiz, type: 'textarea', full: true },
+        { name: 'accionContencion', label: ACTION_FIELD_LABELS.accionContencion, type: 'textarea', full: true },
       ],
     },
   ];
   const finalEvaluationSection: { title: string; phase: FormPhase; hidden?: boolean; fields: FieldConfig[] } = {
-    title: finalEvaluatorRole === 'VAL' ? 'D. Evaluación del líder del proceso' : 'D. Evaluación del evaluador',
+    title: getEvaluationSectionTitle(selectedEvaluator),
     phase: 'oci',
     hidden: mode === 'create' && !isAdmin,
     fields: [
-      { name: 'fechaEvaluacion', label: 'Fecha de evaluación', type: 'date' },
-      { name: 'eficacia', label: finalEvaluatorRole === 'OCI' ? 'Fue eficaz?' : 'Fue validada la acción?', type: 'select', options: ['', 'SI', 'NO'] },
-      { name: 'evaluacionObservacion', label: 'Observación de la acción', type: 'textarea', full: true },
+      { name: 'fechaEvaluacion', label: ACTION_FIELD_LABELS.fechaEvaluacion, type: 'date' },
+      { name: 'eficacia', label: getEffectivenessLabel(selectedEvaluator), type: 'select', options: ['', 'SI', 'NO'] },
+      { name: 'evaluacionObservacion', label: ACTION_FIELD_LABELS.evaluacionObservacion, type: 'textarea', full: true },
     ],
   };
 
@@ -258,16 +281,16 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
     setOpenSections((current) => ({ ...current, [key]: !(current[key] ?? access === 'editable') }));
   };
 
-  const submitHandler: SubmitHandler<ActionFormValues> = (values) => {
+  const submitHandler: SubmitHandler<ActionFormValues> = async (values) => {
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
     setValidationMessage('');
-    setPendingSubmitValues(syncLegacyPlanFields(values));
+    try {
+      await onSubmit(syncLegacyPlanFields(values));
+    } finally {
+      submissionInFlight.current = false;
+    }
   };
-
-  function confirmSave() {
-    if (!pendingSubmitValues) return;
-    onSubmit(pendingSubmitValues);
-    setPendingSubmitValues(null);
-  }
 
   const invalidSubmitHandler = (formErrors: FieldErrors<ActionFormValues>) => {
     const visibleSectionsForErrors = [...sections, finalEvaluationSection].filter((section) => !section.hidden);
@@ -324,6 +347,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   mode={mode}
                   error={errors[field.name]?.message}
                   register={register}
+                  control={control}
                   disabled={access !== 'editable' || (field.name === 'proceso' && scopedProcesses.length === 1)}
                   readOnly={field.readOnly}
                 />
@@ -338,7 +362,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         isOpen={isSectionOpen('plan-detail', getPhaseAccess('plan'))}
         onToggle={() => toggleSection('plan-detail', getPhaseAccess('plan'))}
         phase="plan"
-        title="C. Plan de actividades"
+        title={ACTION_SECTION_TITLES.plan}
       >
       <div className="form-dynamic-section">
         <DynamicSectionHeader
@@ -371,10 +395,10 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
         {showExecutionFields && isCorrective && planFieldArray.fields.length ? (
           <div className="form-grid">
             <NestedTextArea
-              label="Respuesta a la acción de contención REV"
+              label={ACTION_FIELD_LABELS.respuestaContencion}
               name="planMejoramiento.0.observacionRevision"
-              register={register}
-              disabled={!canEditPlanExecution}
+              control={control}
+              disabled={!canEditPlanExecution || hasActivityValidationProgress(initialValues.planMejoramiento[0])}
               full
             />
           </div>
@@ -392,11 +416,11 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                 </div>
                 <div className="form-grid">
                   <ActivityCodeField actionId={selectedActionId} index={index} />
-                  <NestedTextArea label="Actividad" name={`planMejoramiento.${index}.actividad`} register={register} disabled={!canEditActivityDefinition} full />
-                  <NestedInput label="Fecha inicio actividad" name={`planMejoramiento.${index}.fechaApertura`} register={register} disabled={!canEditActivityDefinition} type="date" />
-                  <NestedInput label="Fecha fin actividad" name={`planMejoramiento.${index}.fechaCierre`} register={register} disabled={!canEditActivityDefinition} type="date" />
+                  <NestedTextArea label={ACTION_FIELD_LABELS.actividad} name={`planMejoramiento.${index}.actividad`} control={control} disabled={!canEditActivityDefinition} full />
+                  <NestedInput label={ACTION_FIELD_LABELS.fechaApertura} name={`planMejoramiento.${index}.fechaApertura`} register={register} disabled={!canEditActivityDefinition} type="date" />
+                  <NestedInput label={ACTION_FIELD_LABELS.fechaCierre} name={`planMejoramiento.${index}.fechaCierre`} register={register} disabled={!canEditActivityDefinition} type="date" />
                   <NestedInput
-                    label="Responsable de actividad"
+                    label={ACTION_FIELD_LABELS.responsable}
                     name={`planMejoramiento.${index}.responsable`}
                     register={register}
                     type="text"
@@ -404,19 +428,24 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   />
                   {showExecutionFields ? (
                     <>
-                      <EvidenceUrlField driveUrl={driveUrl} index={index} register={register} disabled={!canEditPlanExecution} />
+                      <EvidenceUrlField
+                        driveUrl={driveUrl}
+                        index={index}
+                        register={register}
+                        disabled={!canEditPlanExecution || hasActivityValidationProgress(initialValues.planMejoramiento[index])}
+                      />
                       <NestedInput
-                        label="Fecha ejecución"
+                        label={ACTION_FIELD_LABELS.revisionFecha}
                         name={`planMejoramiento.${index}.revisionFecha`}
                         register={register}
                         type="date"
-                        disabled={!canEditPlanExecution}
+                        disabled={!canEditPlanExecution || hasActivityValidationProgress(initialValues.planMejoramiento[index])}
                       />
                       <NestedTextArea
-                        label="Descripción de la ejecución"
+                        label={ACTION_FIELD_LABELS.revisionObservacion}
                         name={`planMejoramiento.${index}.revisionObservacion`}
-                        register={register}
-                        disabled={!canEditPlanExecution}
+                        control={control}
+                        disabled={!canEditPlanExecution || hasActivityValidationProgress(initialValues.planMejoramiento[index])}
                         full
                       />
                     </>
@@ -424,14 +453,14 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   {showValidationFields ? (
                     <>
                       <NestedInput
-                        label="Responsable validación"
+                        label={ACTION_FIELD_LABELS.validacionResponsable}
                         name={`planMejoramiento.${index}.validacionResponsable`}
                         register={register}
                         type="text"
                         readOnly={!isAdmin}
                       />
                       <NestedInput
-                        label="Fecha validación"
+                        label={ACTION_FIELD_LABELS.validacionFecha}
                         name={`planMejoramiento.${index}.validacionFecha`}
                         register={register}
                         disabled={!canEditPlanValidation || !isActivityReviewed(watchedActivities[index])}
@@ -439,7 +468,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                         type="date"
                       />
                       <NestedSelect
-                        label="Fue validada la actividad?"
+                        label={ACTION_FIELD_LABELS.validacionObservacion}
                         name={`planMejoramiento.${index}.validacionObservacion`}
                         register={register}
                         disabled={!canEditPlanValidation || !isActivityReviewed(watchedActivities[index])}
@@ -476,6 +505,7 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
                   mode={mode}
                   error={errors[field.name]?.message}
                   register={register}
+                  control={control}
                   disabled={access !== 'editable'}
                   readOnly={field.readOnly}
                 />
@@ -486,68 +516,16 @@ export function ActionForm({ mode, initialValues, parameters, currentUser, isSav
       ) : null}
 
       <div className="actions-row action-form-actions">
-        <button className="button button--primary" type="submit" disabled={isSaving}>
+        <button className="button button--primary" type="submit" disabled={isSaving || isSubmitting}>
           <Save aria-hidden size={18} />
-          {isSaving ? 'Guardando...' : 'Guardar'}
+          {isSaving || isSubmitting ? 'Guardando...' : 'Guardar'}
         </button>
-        <button className="button button--secondary" type="button" onClick={cancel}>
+        <button className="button button--secondary" type="button" disabled={isSaving || isSubmitting} onClick={cancel}>
           <X aria-hidden size={18} />
           Cancelar
         </button>
       </div>
-      {pendingSubmitValues ? (
-        <SaveConfirmationModal
-          isSaving={isSaving}
-          role={currentRole ?? 'CONSULTA'}
-          activityCount={pendingSubmitValues.planMejoramiento.filter((activity) => activity.actividad || activity.responsable).length}
-          onCancel={() => setPendingSubmitValues(null)}
-          onConfirm={confirmSave}
-        />
-      ) : null}
     </form>
-  );
-}
-function SaveConfirmationModal({
-  isSaving,
-  role,
-  activityCount,
-  onCancel,
-  onConfirm,
-}: {
-  isSaving: boolean;
-  role: string;
-  activityCount: number;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="save-modal" role="dialog" aria-modal="true" aria-labelledby="save-modal-title">
-      <button className="save-modal__backdrop" type="button" aria-label="Cancelar guardado" disabled={isSaving} onClick={onCancel} />
-      <section className="save-modal__card">
-        <div className="save-modal__head">
-          <span className="save-modal__icon">
-            <Save aria-hidden size={20} />
-          </span>
-          <div>
-            <h3 id="save-modal-title">Confirmar guardado</h3>
-            <p>Revisa que toda la información esté correcta antes de guardar.</p>
-          </div>
-        </div>
-        <div className="save-modal__summary">
-          <span>Rol: {role}</span>
-          <span>Actividades: {activityCount}</span>
-        </div>
-        <div className="save-modal__actions">
-          <button className="button button--secondary" type="button" disabled={isSaving} onClick={onCancel}>
-            Cancelar
-          </button>
-          <button className="button button--primary" type="button" disabled={isSaving} onClick={onConfirm}>
-            <Save aria-hidden size={18} />
-            {isSaving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
-      </section>
-    </div>
   );
 }
 
@@ -602,6 +580,27 @@ function areActivitiesReadyForFinalEvaluation(values: ActionFormValues): boolean
 
 function isActivityReviewed(activity: ActionFormValues['planMejoramiento'][number] | undefined): boolean {
   return Boolean(activity?.revisionFecha && activity.revisionObservacion.trim());
+}
+
+function hasActivityOperationalProgress(
+  activity: ActionFormValues['planMejoramiento'][number] | undefined,
+): boolean {
+  return Boolean(
+    activity?.evidencia.trim() ||
+      activity?.revisionFecha ||
+      activity?.revisionObservacion.trim() ||
+      activity?.observacionRevision.trim() ||
+      activity?.validacionFecha ||
+      activity?.validacionObservacion.trim(),
+  );
+}
+
+function hasActivityValidationProgress(
+  activity: ActionFormValues['planMejoramiento'][number] | undefined,
+): boolean {
+  return Boolean(
+    activity?.validacionFecha || activity?.validacionObservacion.trim(),
+  );
 }
 
 function collectErrorMessages(errors: unknown): string[] {
@@ -864,7 +863,7 @@ function ActivityCodeField({ actionId, index }: { actionId: number | undefined; 
   const code = buildActivityCode(actionId, index + 1);
   return (
     <div className="form-field">
-      <label>Código de actividad</label>
+      <label>{ACTION_FIELD_LABELS.idActividad}</label>
       <input readOnly type="text" value={code} />
     </div>
   );
@@ -886,7 +885,7 @@ function EvidenceUrlField({
   return (
     <div className="form-field form-field--full evidence-url-field">
       <div className="evidence-url-field__head">
-        <label htmlFor={id}>URL de evidencia</label>
+        <label htmlFor={id}>{ACTION_FIELD_LABELS.evidencia}</label>
         <a
           className={`button button--secondary evidence-url-field__button ${driveUrl ? '' : 'is-disabled'}`}
           aria-disabled={!driveUrl}
@@ -911,13 +910,13 @@ function EvidenceUrlField({
 function NestedTextArea({
   label,
   name,
-  register,
+  control,
   full,
   disabled,
 }: {
   label: string;
   name: `planMejoramiento.${number}.${keyof ActionFormValues['planMejoramiento'][number]}`;
-  register: UseFormRegister<ActionFormValues>;
+  control: Control<ActionFormValues>;
   full?: boolean;
   disabled?: boolean;
 }) {
@@ -925,7 +924,7 @@ function NestedTextArea({
   return (
     <div className={`form-field ${full ? 'form-field--full' : ''}`}>
       <label htmlFor={id}>{label}</label>
-      <textarea id={id} disabled={disabled} {...register(name)} />
+      <StructuredTextArea id={id} name={name} control={control} disabled={disabled} />
     </div>
   );
 }
@@ -951,13 +950,29 @@ interface FormFieldProps {
   mode: 'create' | 'edit';
   error?: string;
   register: UseFormRegister<ActionFormValues>;
+  control: Control<ActionFormValues>;
   disabled?: boolean;
   readOnly?: boolean;
 }
 
-function FormField({ field, mode, error, register, disabled: phaseDisabled, readOnly }: FormFieldProps) {
+function FormField({ field, mode, error, register, control, disabled: phaseDisabled, readOnly }: FormFieldProps) {
   const id = `field-${field.name}`;
   const listId = `${id}-options`;
+  const disabled = phaseDisabled || (field.name === 'estado' && mode === 'create');
+
+  if (field.type === 'textarea') {
+    return (
+      <div className={`form-field ${field.full ? 'form-field--full' : ''}`}>
+        <label htmlFor={id}>
+          {field.label}
+          {field.required ? ' *' : ''}
+        </label>
+        <StructuredTextArea id={id} name={field.name} control={control} disabled={disabled} />
+        {error ? <span className="field-error">{error}</span> : null}
+      </div>
+    );
+  }
+
   const common = register(
     field.name,
     field.type === 'number'
@@ -966,7 +981,6 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled, read
         }
       : undefined,
   );
-  const disabled = phaseDisabled || (field.name === 'estado' && mode === 'create');
 
   return (
     <div className={`form-field ${field.full ? 'form-field--full' : ''}`}>
@@ -974,9 +988,7 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled, read
         {field.label}
         {field.required ? ' *' : ''}
       </label>
-      {field.type === 'textarea' ? (
-        <textarea id={id} disabled={disabled} {...common} />
-      ) : field.type === 'select' ? (
+      {field.type === 'select' ? (
         <select id={id} disabled={disabled} {...common}>
           {!field.required || field.placeholder ? <option value="">{field.placeholder ?? 'Seleccione...'}</option> : null}
           {field.options?.map((option) => (
@@ -1008,8 +1020,81 @@ function FormField({ field, mode, error, register, disabled: phaseDisabled, read
   );
 }
 
+function StructuredTextArea({
+  id,
+  name,
+  control,
+  disabled,
+}: {
+  id: string;
+  name: FieldPath<ActionFormValues>;
+  control: Control<ActionFormValues>;
+  disabled?: boolean;
+}) {
+  const { field } = useController({ control, name });
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function setTextareaRef(element: HTMLTextAreaElement | null) {
+    textareaRef.current = element;
+    field.ref(element);
+  }
+
+  function formatList(style: ListStyle) {
+    const textarea = textareaRef.current;
+    if (!textarea || disabled) return;
+    const edit = applyListFormat(textarea.value, textarea.selectionStart, textarea.selectionEnd, style);
+    field.onChange(edit.value);
+    const restoreSelection = () => {
+      textarea.focus();
+      textarea.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(restoreSelection);
+    } else {
+      window.setTimeout(restoreSelection, 0);
+    }
+  }
+
+  return (
+    <div className="structured-text-editor">
+      <div className="structured-text-editor__toolbar" role="toolbar" aria-label="Formato de texto">
+        <button
+          type="button"
+          disabled={disabled}
+          title="Aplicar o quitar viñetas a las líneas seleccionadas"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => formatList('bullet')}
+        >
+          <List aria-hidden size={16} />
+          Viñetas
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          title="Aplicar o quitar numeración a las líneas seleccionadas"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => formatList('number')}
+        >
+          <ListOrdered aria-hidden size={16} />
+          Numeración
+        </button>
+        <span>Selecciona una o varias líneas para organizarlas.</span>
+      </div>
+      <textarea
+        id={id}
+        ref={setTextareaRef}
+        name={field.name}
+        value={typeof field.value === 'string' ? field.value : ''}
+        disabled={disabled}
+        onBlur={field.onBlur}
+        onChange={field.onChange}
+      />
+    </div>
+  );
+}
+
 function getOptionLabel(fieldName: FieldName, option: string): string {
   if (!option) return 'Sin evaluar';
-  if (fieldName === 'auditorInterno' && option === 'OCI') return 'Jefe de Control Interno';
+  if (fieldName === 'auditorInterno') return getEvaluatorLabel(option);
   return option;
 }

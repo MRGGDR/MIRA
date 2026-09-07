@@ -12,8 +12,9 @@ import { useUpdateAction } from '@/features/actions/hooks/useActionMutations';
 import { useParameters } from '@/features/actions/hooks/useParameters';
 import type { ActionFormValues } from '@/features/actions/schemas/actionSchema';
 import { actionToFormValues } from '@/features/actions/utils/actionDefaults';
-import { isActionPendingForRole } from '@/features/actions/utils/workflow';
+import { canCreatorMaintainAction, canRevMaintainAction, isActionPendingForRole } from '@/features/actions/utils/workflow';
 import { useAuth } from '@/features/auth/AuthContext';
+import { isActionInUserProcessScope } from '@/features/auth/access';
 
 export function ActionEditPage() {
   const id = Number(useParams().id);
@@ -49,13 +50,15 @@ export function ActionEditPage() {
   if (actionQuery.isLoading || parametersQuery.isLoading) return <LoadingState label="Cargando acción..." />;
   if (actionQuery.isError) return <ErrorMessage error={actionQuery.error} />;
   if (!actionQuery.data) return <ErrorMessage error={new Error('Acción no encontrada.')} />;
+  if (!isActionInUserProcessScope(actionQuery.data, user)) return <Navigate to="/acciones" replace />;
   const canRevMaintainActivities =
-    user?.rol === 'REV' && Boolean(user.permissions.canEditPlan) && actionQuery.data.estadoActual !== 'CERRADA';
+    user?.rol === 'REV' &&
+    Boolean(user.permissions.canEditPlan) &&
+    canRevMaintainAction(actionQuery.data);
   const canMaintainOpenAction =
     user?.rol === 'CREADOR' &&
     Boolean(user.permissions.canUpdate) &&
-    actionQuery.data.estado !== 'CERRADA' &&
-    actionQuery.data.estadoActual !== 'CERRADA';
+    canCreatorMaintainAction(actionQuery.data);
   if (!user?.permissions.canAdmin && !isActionPendingForRole(actionQuery.data, user?.rol) && !canRevMaintainActivities && !canMaintainOpenAction) {
     return <Navigate to={`/acciones/${id}`} replace />;
   }
@@ -77,7 +80,7 @@ export function ActionEditPage() {
         parameters={parametersQuery.data}
         currentUser={user}
         isSaving={updateAction.isPending}
-        onSubmit={(values) => void submit(values)}
+        onSubmit={submit}
       />
     </div>
   );

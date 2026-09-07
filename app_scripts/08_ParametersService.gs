@@ -48,7 +48,7 @@ function getDefaultParameters_() {
 }
 
 function filterProcessesForUser_(user, procesos) {
-  if (user.permissions && (user.permissions.canAdmin || user.rol === 'OCI' || user.rol === 'REV')) return procesos;
+  if (hasGlobalProcessScope_(user)) return procesos;
   var proceso = normalizeText_(user.proceso).toUpperCase();
   if (!proceso) return [];
   var legacyProcesses = CONFIG.LEGACY_PROCESS_NAMES[proceso];
