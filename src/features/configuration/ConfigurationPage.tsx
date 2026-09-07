@@ -65,7 +65,7 @@ export function ConfigurationPage() {
 
   const processOptions = useMemo(() => PROCESSES.map((process) => process.name), []);
   const hasGlobalProcessScope = form.rol === 'ADMIN' || form.rol === 'OCI';
-  const requiresProcess = form.rol !== 'ADMIN' && form.rol !== 'OCI' && form.rol !== 'CONSULTA';
+  const requiresProcess = form.rol !== 'ADMIN' && form.rol !== 'OCI';
   const usersEndpointMissing = usersQuery.error instanceof ApiClientError && usersQuery.error.code === 'UNKNOWN_ACTION';
   const missingIdentifier = submitted && !form.email.trim();
   const missingName = submitted && !form.nombre.trim();
@@ -100,7 +100,7 @@ export function ConfigurationPage() {
     if (!editingUser) return;
     setEditSubmitted(true);
     const editHasGlobalProcessScope = editingUser.rol === 'ADMIN' || editingUser.rol === 'OCI';
-    const editRequiresProcess = editingUser.rol !== 'ADMIN' && editingUser.rol !== 'OCI' && editingUser.rol !== 'CONSULTA';
+    const editRequiresProcess = editingUser.rol !== 'ADMIN' && editingUser.rol !== 'OCI';
     if (!editingUser.nombre.trim() || (editRequiresProcess && !editingUser.proceso.trim())) return;
     updateUser.mutate({
       email: editingUser.email,
@@ -294,7 +294,7 @@ function UserRow({
 }) {
   const isEditing = editingUser?.email === user.email;
   const editHasGlobalProcessScope = Boolean(editingUser && (editingUser.rol === 'ADMIN' || editingUser.rol === 'OCI'));
-  const editRequiresProcess = editingUser ? editingUser.rol !== 'ADMIN' && editingUser.rol !== 'OCI' && editingUser.rol !== 'CONSULTA' : false;
+  const editRequiresProcess = editingUser ? editingUser.rol !== 'ADMIN' && editingUser.rol !== 'OCI' : false;
   const missingName = Boolean(isEditing && editSubmitted && !editingUser?.nombre.trim());
   const missingProcess = Boolean(isEditing && editSubmitted && editRequiresProcess && !editingUser?.proceso.trim());
 
@@ -304,7 +304,7 @@ function UserRow({
         <td>{user.email}</td>
         <td>{user.nombre}</td>
         <td>{user.rol}</td>
-        <td>{user.proceso || 'Todos'}</td>
+        <td>{user.proceso || (user.rol === 'ADMIN' || user.rol === 'OCI' ? 'Todos' : 'Sin asignar')}</td>
         <td>
           <span className={`user-status-pill ${user.activo ? 'user-status-pill--active' : 'user-status-pill--inactive'}`}>
             {user.activo ? 'Activo' : 'Inactivo'}

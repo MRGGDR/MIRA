@@ -2,6 +2,60 @@
 
 Todos los cambios relevantes de MIRA se documentan en este archivo.
 
+## [1.2.7] - 2026-09-06
+
+Correccion integral del alcance por proceso, permisos de edicion, dashboard y guardado de acciones.
+
+### Alcance y seguridad por rol
+
+- Se restringieron `REV`, `VAL`, `CREADOR` y `CONSULTA` al proceso o linea asignada a su usuario; solo `ADMIN` y `OCI` conservan alcance global.
+- Se aplico el mismo alcance en listados, detalle, edicion, parametros, estadisticas y dashboard.
+- Se agrego autorizacion de campos en Apps Script para impedir que una peticion manipulada modifique informacion perteneciente a otro rol.
+- `REV` solo puede diligenciar evidencia y revision, y deja de poder modificar una actividad cuando `VAL` inicia su validacion.
+- `VAL` solo puede validar actividades revisadas y efectuar la evaluacion final cuando el evaluador es el lider del proceso.
+- `OCI` queda limitado a la evaluacion final y `CREADOR` no puede cambiar o eliminar actividades una vez iniciado su seguimiento.
+- Se restringio el historial y el acceso directo a la base de datos al rol administrador.
+
+### Dashboard y estados
+
+- Se corrigio el calculo de acciones abiertas, cerradas y vencidas para que las categorias sean excluyentes y su suma coincida con el total visible.
+- Se agrego el total real de actividades y se aplicaron los filtros del usuario a indicadores, graficas, pendientes y registros recientes.
+- Se corrigio el tratamiento de estados vencidos persistidos y el cierre tanto para evaluaciones eficaces como no eficaces.
+
+### Guardado y concurrencia
+
+- Se elimino la confirmacion intermedia que obligaba a presionar `Guardar` dos veces.
+- Se bloqueo el envio duplicado mientras existe una operacion en curso y se amplio a 90 segundos el tiempo de espera de escrituras.
+- Se protegieron actualizaciones y notificaciones mediante bloqueo de Apps Script.
+- Se actualiza inmediatamente la cache del detalle despues de guardar y las consultas relacionadas se refrescan en segundo plano.
+
+### Validacion tecnica
+
+- Se agregaron pruebas de alcance, permisos de campos y fases para `CREADOR`, `REV`, `VAL`, `OCI` y `CONSULTA`, incluyendo peticiones manipuladas.
+- Se validaron conteos del dashboard con acciones de varios procesos y estados.
+- Se ejecutaron 59 pruebas unitarias, compilacion de produccion, analisis estatico y validacion sintactica de los 15 archivos de Apps Script.
+
+## [1.2.6] - 2026-07-29
+
+Alineacion de la consulta de reportes y formato estructurado en campos de texto.
+
+### Consulta de reportes
+
+- Se reemplazaron las etiquetas heredadas `De`, `Para`, `BRAINSTORMING`, `Causa`, `Descripcion` y `Empleado` por los mismos titulos usados en el formulario de reporte.
+- Se organizaron las secciones de detalle como `A. Descripcion del hallazgo`, `B. Analisis de causas`, `C. Plan de actividades` y la evaluacion correspondiente.
+- Se centralizaron las etiquetas compartidas entre formulario y consulta para evitar nuevas diferencias.
+
+### Texto estructurado
+
+- Se agregaron opciones de vinetas y numeracion a todos los campos de texto multilínea.
+- El formato se guarda como texto seguro con saltos de linea, compatible con Google Sheets y con los reportes existentes.
+- La vista de detalle conserva saltos, vinetas y numeracion en descripciones, causas, actividades y observaciones.
+
+### Validacion tecnica
+
+- Se agregaron pruebas para las listas y para la conservacion del formato al validar un reporte.
+- Se ejecutaron compilacion, pruebas y analisis estatico.
+
 ## [1.2.5] - 2026-07-16
 
 Actualizacion de etiqueta visible para el evaluador de Control Interno.

@@ -86,6 +86,17 @@ export function countPendingForRole(actions: CorrectiveAction[], role: UserRole 
   return actions.filter((action) => isActionPendingForRole(action, role)).length;
 }
 
+export function canCreatorMaintainAction(action: CorrectiveAction): boolean {
+  if (action.estado === 'CERRADA' || action.estadoActual === 'CERRADA') return false;
+  return !getActiveActivities(action).some(hasActivityOperationalProgress);
+}
+
+export function canRevMaintainAction(action: CorrectiveAction): boolean {
+  if (!['PLAN_ACCION', 'VALIDACION', 'REVISION_OCI'].includes(action.estadoActual)) return false;
+  const activities = getActiveActivities(action);
+  return activities.length > 0 && activities.some((activity) => !hasActivityValidationProgress(activity));
+}
+
 export function buildWorkflowRoleQueues(actions: CorrectiveAction[]) {
   return [
     { role: 'CREADOR' as const, label: 'Creador', states: ['REGISTRO', 'ANALISIS'] as DocumentState[] },
@@ -142,9 +153,24 @@ function isActivityValidated(activity: CorrectiveAction['planMejoramiento'][numb
   return Boolean(activity.validacionResponsable.trim() && activity.validacionFecha && activity.validacionObservacion.trim());
 }
 
+function hasActivityOperationalProgress(activity: CorrectiveAction['planMejoramiento'][number]): boolean {
+  return Boolean(
+    activity.evidencia.trim() ||
+      activity.revisionFecha ||
+      activity.revisionObservacion.trim() ||
+      activity.observacionRevision.trim() ||
+      activity.validacionFecha ||
+      activity.validacionObservacion.trim(),
+  );
+}
+
+function hasActivityValidationProgress(activity: CorrectiveAction['planMejoramiento'][number]): boolean {
+  return Boolean(activity.validacionFecha || activity.validacionObservacion.trim());
+}
+
 function hasActivitiesPendingReview(action: CorrectiveAction): boolean {
   const activities = getActiveActivities(action);
-  if (!activities.length) return action.estadoActual === 'PLAN_ACCION';
+  if (!activities.length) return false;
   return activities.some((activity) => !isActivityReviewed(activity));
 }
 

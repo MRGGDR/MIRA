@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { CorrectiveAction } from '@/features/actions/types';
-import { getWorkflowStage, isActionPendingForRole } from '@/features/actions/utils/workflow';
+import {
+  canCreatorMaintainAction,
+  canRevMaintainAction,
+  getWorkflowStage,
+  isActionPendingForRole,
+} from '@/features/actions/utils/workflow';
 
 function buildAction(overrides: Partial<CorrectiveAction> = {}): CorrectiveAction {
   return {
@@ -108,5 +113,28 @@ describe('workflow role pending logic', () => {
 
     expect(getWorkflowStage(action).shortLabel).toBe('Evaluador');
     expect(getWorkflowStage(action).ownerLabel).toBe('Evaluador');
+  });
+
+  it('locks CREADOR after execution starts and REV after validation starts', () => {
+    const action = buildAction();
+    expect(canCreatorMaintainAction(action)).toBe(false);
+    expect(canRevMaintainAction(action)).toBe(true);
+
+    const validated = buildAction({
+      planMejoramiento: action.planMejoramiento.map((activity) => ({
+        ...activity,
+        revisionFecha: activity.revisionFecha || '2026-07-16',
+        revisionObservacion: activity.revisionObservacion || 'Ejecutada',
+        validacionFecha: '2026-07-17',
+        validacionObservacion: 'SI',
+      })),
+    });
+    expect(canRevMaintainAction(validated)).toBe(false);
+  });
+
+  it('does not assign an empty action plan to REV', () => {
+    const action = buildAction({ planMejoramiento: [], accion: '', responsable: '' });
+    expect(isActionPendingForRole(action, 'REV')).toBe(false);
+    expect(canRevMaintainAction(action)).toBe(false);
   });
 });

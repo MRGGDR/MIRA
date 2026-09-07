@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { apiClient, getStoredAuthToken, setStoredAuthToken } from '@/services/apiClient';
 import type { CurrentUser } from '@/features/actions/types';
+import { queryClient } from '@/app/queryClient';
 
 interface AuthContextValue {
   user: CurrentUser | null;
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) setUser(currentUser);
       } catch {
         setStoredAuthToken('');
+        queryClient.clear();
         if (active) setUser(null);
       } finally {
         if (active) setIsLoading(false);
@@ -39,12 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const session = await apiClient.login(email, password);
+    queryClient.clear();
     setStoredAuthToken(session.token);
     setUser(session.user);
   }, []);
 
   const logout = useCallback(() => {
     setStoredAuthToken('');
+    queryClient.clear();
     setUser(null);
   }, []);
 

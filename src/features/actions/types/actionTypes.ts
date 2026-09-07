@@ -115,6 +115,7 @@ export interface Parameters {
 
 export interface DashboardStats {
   total: number;
+  actividades: number;
   abiertas: number;
   cerradas: number;
   vencidas: number;

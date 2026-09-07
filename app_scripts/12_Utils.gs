@@ -140,10 +140,9 @@ function normalizeEffectiveness_(value) {
 
 function calculateStatus_(action) {
   if (normalizeDocumentState_(action.estadoActual) === 'CERRADA') return 'CERRADA';
+  if (normalizeEffectiveness_(action.eficacia)) return CONFIG.STATUS_RULE.CLOSED_WHEN_EFFECTIVENESS_PRESENT;
   if (isActionExpired_(action)) return 'VENCIDA';
-  return normalizeEffectiveness_(action.eficacia)
-    ? CONFIG.STATUS_RULE.CLOSED_WHEN_EFFECTIVENESS_PRESENT
-    : CONFIG.STATUS_RULE.OPEN_WHEN_EFFECTIVENESS_EMPTY;
+  return CONFIG.STATUS_RULE.OPEN_WHEN_EFFECTIVENESS_EMPTY;
 }
 
 function normalizeDocumentState_(value) {
@@ -153,7 +152,7 @@ function normalizeDocumentState_(value) {
 }
 
 function calculateDocumentState_(action) {
-  if (normalizeEffectiveness_(action.eficacia) === 'SI') return 'CERRADA';
+  if (normalizeEffectiveness_(action.eficacia)) return 'CERRADA';
   var current = normalizeDocumentState_(action.estadoActual);
   if (areActivitiesReadyForOci_(action)) {
     return isOciEvaluator_(action) ? 'REVISION_OCI' : 'VALIDACION';
@@ -252,7 +251,8 @@ function isValidIsoDate_(value) {
 
 function isActionExpired_(action) {
   var today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
-  return action.estado === 'ABIERTA' && action.fechaFinAccion && action.fechaFinAccion < today;
+  if (normalizeDocumentState_(action.estadoActual) === 'CERRADA' || normalizeEffectiveness_(action.eficacia)) return false;
+  return Boolean(action.fechaFinAccion && action.fechaFinAccion < today);
 }
 
 function uniqueSorted_(values) {

@@ -1,11 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
+import { Navigate } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ErrorMessage } from '@/components/feedback/ErrorMessage';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { actionQueries } from '@/features/actions/api/actionQueries';
+import { useAuth } from '@/features/auth/AuthContext';
 
 export function AuditPage() {
-  const auditQuery = useQuery(actionQueries.audit());
+  const { user } = useAuth();
+  const auditQuery = useQuery({ ...actionQueries.audit(), enabled: Boolean(user?.permissions.canAdmin) });
+
+  if (!user?.permissions.canAdmin) return <Navigate to="/" replace />;
 
   if (auditQuery.isLoading) return <LoadingState label="Cargando historial..." />;
   if (auditQuery.isError) return <ErrorMessage error={auditQuery.error} />;
